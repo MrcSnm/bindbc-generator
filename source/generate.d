@@ -90,21 +90,12 @@ bool executeDpp(File file, string _dppArgs)
     if(ret.status == 0)
     {
         writeln("Types.d was succesfully created with "~dppArgs.join(" "));
-        version(Windows)
-        {
-            string cwd = getcwd();
-            string genName = stripExtension(file.name)~".d";
-            string driveLetter = cwd[0..2];
-
-            string cmd = "RENAME "~ driveLetter~genName ~ " types.d && move " ~ driveLetter~"types.d bindbc/cimgui";
-            auto res = executeShell(cmd);
-            if(res.status == 1) //Error
-                writeln("Could not rename '"~file.name~"' to types.d");
-        }
-        else
-        {
-            std.file.rename(file.name, "./bindbc/"~stripExtension(file.name)~"/types.d");
-        }
+        //Instead of renaming, just copy its content and delete it
+        string noExt = stripExtension(file.name);
+        string genName = noExt~".d";
+        string fileContent = "module bindbc."~ noExt~".types;\n" ~readText(genName);
+        mkdirRecurse("bindbc/cimgui");
+        std.file.write("bindbc/"~noExt~"/types.d", fileContent);
     }
     else
     {
@@ -454,7 +445,8 @@ Functions definitions comes from the .h file specified
     //It will already remove darrFuncs params
     createFuncsFile(stripExtension(_f), darrFuncs);     
     createLibLoad(stripExtension(_f), darrFuncs);    
-    
 
+    if(!optNoTypes)
+        remove(_f.stripExtension ~ ".d");
     return 1;
 } 
