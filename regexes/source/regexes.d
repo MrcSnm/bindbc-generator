@@ -25,5 +25,6 @@ enum CPP_TO_D
 
 enum GetFuncParamsAndName = ctRegex!(r"((?:const\s)?[\w*]+)\s+?(\w+)");
 enum GetFuncParamsAndName2 = ctRegex!(r"((?:const\s)?.+?)\s([\w*]+)(\(.*\));", "m");
+enum SingleSlash = ctRegex!(r"\\");
 
 enum DollarToLib = ctRegex!(r"\$");

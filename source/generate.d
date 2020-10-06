@@ -5,7 +5,7 @@ import std.process:executeShell;
 import std.array;
 import std.string;
 import std.getopt;
-import std.regex : replaceAll, matchAll, regex;
+import std.regex : replaceAll, matchAll, regex, Regex;
 import std.path:baseName, stripExtension;
 import std.stdio:writeln, File;
 
@@ -69,7 +69,6 @@ bool executeDpp(File file, string _dppArgs)
         if(exists(t))
         {
             selected = t;
-            writeln(selected~" found, creating types.d");
             break;
         }
     }
@@ -338,18 +337,30 @@ enum ERROR = -1;
 string optFile;
 string optDppArgs;
 string optPresets;
+bool optNoTypes;
+string optCustom;
 
 int main(string[] args)
 {
-
-    auto helpInfo = getopt(
-        args,
-        "dpparg|d", &optDppArgs,
-        "file|f", &optFile,
-        "presets|p", &optPresets
-    );
+    GetoptResult helpInfo;
+    try
+    {
+        helpInfo = getopt(
+            args,
+            "dpparg|d", &optDppArgs,
+            "file|f", &optFile,
+            "presets|p", &optPresets,
+            "notypes|n", &optNoTypes,
+            "custom|c", &optCustom
+        );
+    }
+    catch(Exception e)
+    {
+        writeln(e.msg);
+        return ERROR;
+    }
     //I don't really understand what type is regex...
-    auto targetReg = Presets.cimguiFuncs;
+    Regex!char targetReg;
 
     //Dpparg
     helpInfo.options[0].help = "Arguments to be appended to dpp, --preprocess-only is always included. Pass multiple arguments via comma";
@@ -357,29 +368,44 @@ int main(string[] args)
     helpInfo.options[1].help = "Target header to get functions and types for generation";
     //Presets
     helpInfo.options[2].help = r"
+(Presets and custom are mutually exclusive)
 Function getter presets:
    cimgui - Preset used for compiling libcimgui
---custom= - Flags m and g are always added, $1 must always match function without exports, for instance: void func(char* str)
 ";
-    switch(optPresets)
+    helpInfo.options[3].help = "Don't execute Dpp, and don't generate the types file";
+    //Custom
+    helpInfo.options[4].help =r"
+Flags m and g are always added, $1 must always match function without exports.
+Examples: 
+    void func(char* str);
+    int main();
+";
+    
+    if(optPresets != "")
     {
-        case "cimgui":
-            targetReg = Presets.cimguiFuncs;
-            optDppArgs = "--parse-as-cpp,--define CIMGUI_DEFINE_ENUMS_AND_STRUCTS";
-            if(optFile == "")
-                optFile = "cimgui.h";
-            break;
-        case "--custom=":
-            writeln("
+        switch(optPresets)
+        {
+            case "cimgui":
+                targetReg = Presets.cimguiFuncs;
+                optDppArgs = "--parse-as-cpp,--define CIMGUI_DEFINE_ENUMS_AND_STRUCTS";
+                if(optFile == "")
+                    optFile = "cimgui.h";
+                break;
+            default:
+                writeln("Preset named '"~optPresets~"' does not exists");
+                break;
+        }
+    }
+
+    if(optPresets == "" && optCustom != "")
+    {
+        writeln("
 Please consider adding your custom function getter to the list.
-Just create an issue on https://www.github.com/MrcSnm/bindbc-generator
+Just create an issue or a pull request on https://www.github.com/MrcSnm/bindbc-generator
 ");
-            writeln("Compiling "~optPresets[9..$]);
-            targetReg = regex(optPresets[9..$], "mg");
-            break;
-        default:
-            writeln("Preset named '"~optPresets~"' does not exists");
-            break;
+        writeln("Compiling regex");
+        targetReg = regex(optCustom, "mg"); //Auto converts single slash to double for easier usage
+        writeln("Regex Generated:\n\t"~targetReg.toString);
     }
 
     if(helpInfo.helpWanted || (optFile == ""))
@@ -394,21 +420,33 @@ https://www.github.com/MrcSnm/bindbc-generator
         helpInfo.options);
         return 1;
     }
-
-    if(optDppArgs == "")
+    string _f = optFile;
+    if(!optNoTypes)
     {
-        writeln(r"
+        if(optDppArgs == "")
+        {
+            writeln(r"
 No dpp arg specified!
 Beware that for this project it is used for generating struct and enums ONLY
 Functions definitions comes from the .h file specified
 ");
+        }
+        File f = createDppFile(_f);
+        if(f.name == "")
+            return ERROR;
+        executeDpp(f, optDppArgs);
     }
-    string _f = optFile;
-    File f = createDppFile(_f);
-    if(f.name == "")
+    if(optPresets == "" && optCustom == "")
+    {
+        writeln("ERROR:\nNo regex nor presets for getting functions specified\n");
         return ERROR;
-    executeDpp(f, optDppArgs);
+    }
     string funcs = getFuncs(_f, targetReg);
+    if(funcs == "")
+    {
+        writeln("ERROR:\nNo hit was made by your function");
+        return ERROR;
+    }
     string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
     string dfuncs = cppFuncsToD(cleanFuncs);
     string[] darrFuncs = dfuncs.split("\n");

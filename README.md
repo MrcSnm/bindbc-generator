@@ -15,3 +15,22 @@ the functions aliases and bind symbols.
 
 PR's are welcome, every project created using bindbc-generator, please, link to this repo.
 If you find any issue when generating the functions, just create an issue on this repository
+
+## Options
+```
+-d  --dpparg Arguments to be appended to dpp, --preprocess-only is always included. Pass multiple arguments via comma
+-f    --file Target header to get functions and types for generation
+-p --presets
+(Presets and custom are mutually exclusive)
+Function getter presets:
+   cimgui - Preset used for compiling libcimgui
+
+-n --notypes Don't execute Dpp, and don't generate the types file
+-c  --custom
+Flags m and g are always added, $1 must always match function without exports.
+Examples:
+    void func(char* str);
+    int main();
+
+-h    --help This help information.
+```
