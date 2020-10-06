@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/regexes
+regexes.so
+regexes.dylib
+regexes.dll
+regexes.a
+regexes.lib
+regexes-test-*
+*.exe
+*.o
+*.obj
+*.lst

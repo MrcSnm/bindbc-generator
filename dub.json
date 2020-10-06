@@ -1,0 +1,24 @@
+{
+	"authors": [
+		"Hipreme"
+	],
+	"copyright": "Copyright © 2020, Hipreme",
+	"dependencies": 
+	{
+		"regexes":
+		{
+			"path": "regexes"
+		}
+	},
+	"description": "A program for automatically generating binds, using some regexes and dpp",
+	"sourcePaths": ["source"],
+	"targetPath": "bin",
+	"importPaths": [
+		"source"
+	],
+	"libs": ["regexes"],
+	"mainSourceFile": "source/generate.d",
+	"targetType": "executable",
+	"license": "BSL-1.0",
+	"name": "bindbc-generate"
+}

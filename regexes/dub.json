@@ -1,0 +1,10 @@
+{
+	"authors": [
+		"Hipreme"
+	],
+	"copyright": "Copyright © 2020, Hipreme",
+	"targetType": "library",
+	"description": "Precompiled regexes for generator",
+	"license": "proprietary",
+	"name": "regexes"
+}
