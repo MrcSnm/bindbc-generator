@@ -1,3 +1,9 @@
+
+//          Copyright Marcelo S. N. Mancini(Hipreme) 2020.
+// Distributed under the Boost Software License, Version 1.0.
+//    (See accompanying file LICENSE_1_0.txt or copy at
+//          http://www.boost.org/LICENSE_1_0.txt)
+
 module generate;
 import regexes;
 import std.file;
@@ -26,8 +32,8 @@ enum D_TO_REPLACE
     _array = "$1* $2"
 }
 
-enum AliasCreation = "alias da_$2 = $1 function";
-enum GSharedCreation = "da_$2 $2";
+enum AliasCreation = "alias p$2 = $1 function";
+enum GSharedCreation = "p$2 $2";
 enum BindSymbolCreation = "lib.bindSymbol(cast(void**)&$2, \"$2\");";
 
 
