@@ -1,10 +1,11 @@
 module generate;
 import regexes;
 import std.file;
-import std.process:execute;
+import std.process:executeShell;
 import std.array;
 import std.string;
-import std.regex : replaceAll, matchAll;
+import std.getopt;
+import std.regex : replaceAll, matchAll, regex;
 import std.path:baseName, stripExtension;
 import std.stdio:writeln, File;
 
@@ -55,7 +56,6 @@ File createDppFile(string file)
     {
         f = File(dppFile);
         writeln("File '" ~ dppFile ~ "' already exists, ignoring content creation");
-        writeln(f.name);
     }
     return f;
 }
@@ -79,10 +79,47 @@ bool executeDpp(File file, string _dppArgs)
         return false;
     }
 
-    string dppArgs = selected~" --parse-as-cpp --preprocess-only " ~_dppArgs ~ " "~ file.name;
+    string[] dppArgs = [selected, "--preprocess-only"];
+    if(_dppArgs != "")
+        dppArgs~= _dppArgs.split(",");
+    dppArgs~=file.name;
 
-    execute(dppArgs.split(" "));
+    auto ret = executeShell(dppArgs.join(" "));
     
+
+    //Okay
+    if(ret.status == 0)
+    {
+        writeln("Types.d was succesfully created with "~dppArgs.join(" "));
+        version(Windows)
+        {
+            string cwd = getcwd();
+            string genName = stripExtension(file.name)~".d";
+            string driveLetter = cwd[0..2];
+
+            string cmd = "RENAME "~ driveLetter~genName ~ " types.d && move " ~ driveLetter~"types.d bindbc/cimgui";
+            auto res = executeShell(cmd);
+            if(res.status == 1) //Error
+                writeln("Could not rename '"~file.name~"' to types.d");
+        }
+        else
+        {
+            std.file.rename(file.name, "./bindbc/"~stripExtension(file.name)~"/types.d");
+        }
+    }
+    else
+    {
+        writeln(r"
+Could not execute dpp:
+DPP output
+--------------------------------------------------
+");
+    writeln(ret.output);
+    writeln(r"
+--------------------------------------------------
+End of Dpp output
+");
+    }
     return true;
 }
 
@@ -98,7 +135,6 @@ auto getFuncs(Input, Reg)(Input file, Reg reg)
     string f = readText(file);
     auto matches = matchAll(f, reg);
     string ret;
-    // ret.reserve(1024);
     foreach(m; matches)
     {
         ret~= m.hit~"\n";
@@ -180,6 +216,7 @@ string generateGSharedFuncs(string[] funcs)
 
 void createFuncsFile(string libName, ref string[] funcNames)
 {
+    writeln("Writing funcs.d");
     string fileContent = q{
 module bindbc.$.funcs;
 import bindbc.$.types;
@@ -220,6 +257,7 @@ string generateBindSymbols(string[] funcs)
 */
 void createLibLoad(string libName, string[] funcNames)
 {
+    writeln("Writing "~libName~"load.d");
     string fileContent = "module bindbc."~libName~"."~libName~"load;\n";
     fileContent~="import bindbc.loader;\n";
     fileContent~="import bindbc."~libName~".types;\n";
@@ -296,22 +334,88 @@ private bool _load()
 
 
 enum ERROR = -1;
+
+string optFile;
+string optDppArgs;
+string optPresets;
+
 int main(string[] args)
 {
-    string _f = args[1];
+
+    auto helpInfo = getopt(
+        args,
+        "dpparg|d", &optDppArgs,
+        "file|f", &optFile,
+        "presets|p", &optPresets
+    );
+    //I don't really understand what type is regex...
+    auto targetReg = Presets.cimguiFuncs;
+
+    //Dpparg
+    helpInfo.options[0].help = "Arguments to be appended to dpp, --preprocess-only is always included. Pass multiple arguments via comma";
+    //File
+    helpInfo.options[1].help = "Target header to get functions and types for generation";
+    //Presets
+    helpInfo.options[2].help = r"
+Function getter presets:
+   cimgui - Preset used for compiling libcimgui
+--custom= - Flags m and g are always added, $1 must always match function without exports, for instance: void func(char* str)
+";
+    switch(optPresets)
+    {
+        case "cimgui":
+            targetReg = Presets.cimguiFuncs;
+            optDppArgs = "--parse-as-cpp,--define CIMGUI_DEFINE_ENUMS_AND_STRUCTS";
+            if(optFile == "")
+                optFile = "cimgui.h";
+            break;
+        case "--custom=":
+            writeln("
+Please consider adding your custom function getter to the list.
+Just create an issue on https://www.github.com/MrcSnm/bindbc-generator
+");
+            writeln("Compiling "~optPresets[9..$]);
+            targetReg = regex(optPresets[9..$], "mg");
+            break;
+        default:
+            writeln("Preset named '"~optPresets~"' does not exists");
+            break;
+    }
+
+    if(helpInfo.helpWanted || (optFile == ""))
+    {
+        if(optFile == "")
+            writeln("File options is missing, you should always specify the target!");
+        defaultGetoptPrinter(r"
+Bindbc-generator options.
+If you find an issue with the content generation, report it at
+https://www.github.com/MrcSnm/bindbc-generator
+",
+        helpInfo.options);
+        return 1;
+    }
+
+    if(optDppArgs == "")
+    {
+        writeln(r"
+No dpp arg specified!
+Beware that for this project it is used for generating struct and enums ONLY
+Functions definitions comes from the .h file specified
+");
+    }
+    string _f = optFile;
     File f = createDppFile(_f);
     if(f.name == "")
         return ERROR;
-    executeDpp(f, "");
-    string funcs = getFuncs(_f, Presets.cimguiFuncs);
-    string cleanFuncs = cleanPreFuncsDeclaration(funcs, Presets.cimguiFuncs);
+    executeDpp(f, optDppArgs);
+    string funcs = getFuncs(_f, targetReg);
+    string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
     string dfuncs = cppFuncsToD(cleanFuncs);
     string[] darrFuncs = dfuncs.split("\n");
 
     //It will already remove darrFuncs params
     createFuncsFile(stripExtension(_f), darrFuncs);     
-    createLibLoad(stripExtension(_f), darrFuncs);
-    
+    createLibLoad(stripExtension(_f), darrFuncs);    
     
 
     return 1;
