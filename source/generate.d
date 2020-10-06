@@ -361,7 +361,7 @@ int main(string[] args)
     helpInfo.options[2].help = r"
 (Presets and custom are mutually exclusive)
 Function getter presets:
-   cimgui - Preset used for compiling libcimgui
+   cimgui - Preset used for compiling libcimgui -> https://github.com/cimgui/cimgui
 ";
     helpInfo.options[3].help = "Don't execute Dpp, and don't generate the types file";
     //Custom

@@ -23,7 +23,7 @@ If you find any issue when generating the functions, just create an issue on thi
 -p --presets
 (Presets and custom are mutually exclusive)
 Function getter presets:
-   cimgui - Preset used for compiling libcimgui
+   cimgui - Preset used for compiling libcimgui -> https://github.com/cimgui/cimgui
 
 -n --notypes Don't execute Dpp, and don't generate the types file
 -c  --custom
