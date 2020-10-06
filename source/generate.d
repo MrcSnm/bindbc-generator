@@ -336,6 +336,7 @@ string optDppArgs;
 string optPresets;
 bool optNoTypes;
 string optCustom;
+bool optFuncPrefix;
 
 int main(string[] args)
 {
@@ -348,7 +349,8 @@ int main(string[] args)
             "file|f", &optFile,
             "presets|p", &optPresets,
             "notypes|n", &optNoTypes,
-            "custom|c", &optCustom
+            "custom|c", &optCustom,
+            "use-func-prefix|u", &optFuncPrefix
         );
     }
     catch(Exception e)
@@ -377,7 +379,13 @@ Examples:
     void func(char* str);
     int main();
 ";
-    
+    //Prefix-only
+    helpInfo.options[5].help = r"
+This will be the prefix of your regex.
+The postfix will be a predefined one for function format:
+    Appends ^(?: at the start(The one which is meant to be ignored)
+    Appends )(.+\);)$ at the end (Finish the ignored one and append the function $1 one)
+";
     if(optPresets != "")
     {
         switch(optPresets)
@@ -400,8 +408,17 @@ Examples:
 Please consider adding your custom function getter to the list.
 Just create an issue or a pull request on https://www.github.com/MrcSnm/bindbc-generator
 ");
+        string reg;
+        if(optFuncPrefix)
+        {
+            reg~=r"^(?:";
+            reg~=optCustom;
+            reg~=r")(.+\);)$";
+        }
+        else
+            reg~= optCustom;
         writeln("Compiling regex");
-        targetReg = regex(optCustom, "mg"); //Auto converts single slash to double for easier usage
+        targetReg = regex(reg, "mg"); //Auto converts single slash to double for easier usage
         writeln("Regex Generated:\n\t"~targetReg.toString);
     }
 

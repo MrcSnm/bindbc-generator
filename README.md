@@ -31,6 +31,11 @@ Flags m and g are always added, $1 must always match function without exports.
 Examples:
     void func(char* str);
     int main();
+-u  --use-func-prefix
+This will be the prefix of your regex.
+The postfix will be a predefined one for function format:
+    Appends ^(?: at the start(The one which is meant to be ignored)
+    Appends )(.+\);)$ at the end (Finish the ignored one and append the function $1 one)
 
 -h    --help This help information.
 ```
