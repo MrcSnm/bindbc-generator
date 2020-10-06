@@ -237,10 +237,11 @@ extern(C) @nogc nothrow
 string generateBindSymbols(string[] funcs)
 {
     string ret = "";
-    size_t len = funcs.length;
+    size_t len = funcs.length-1;
     foreach(i, f; funcs)
     {
-        ret~= "lib.bindSymbol(cast(void**)&"~f~", \""~f~"\");\n";
+        if(f != "")
+            ret~= "lib.bindSymbol(cast(void**)&"~f~", \""~f~"\");\n";
         if(i + 1 != len)
             ret~="\t";
     }
@@ -325,6 +326,21 @@ private bool _load()
     File _f = File("bindbc/"~libName~"/"~libName~"load.d", "w");
     _f.write(fileContent);
     _f.close();
+}
+
+void createPackage(string libName)
+{
+    //No need to regenerate it everytime
+    if(exists("bindbc/"~libName~"/package.d"))
+        return;
+    string fileContent = q{
+module bindbc.$;
+
+public import bindbc.$.funcs;
+public import bindbc.$.$load;
+public import bindbc.$.types;
+}.replaceAll(DollarToLib, libName);
+    std.file.write("bindbc/"~libName~"/package.d", fileContent);
 }
 
 
@@ -466,8 +482,10 @@ Functions definitions comes from the .h file specified
     string[] darrFuncs = dfuncs.split("\n");
 
     //It will already remove darrFuncs params
-    createFuncsFile(stripExtension(_f), darrFuncs);     
-    createLibLoad(stripExtension(_f), darrFuncs);    
+    string libName = stripExtension(_f);
+    createFuncsFile(libName, darrFuncs);     
+    createLibLoad(libName, darrFuncs);    
+    createPackage(libName);
 
     if(!optNoTypes)
         remove(_f.stripExtension ~ ".d");
