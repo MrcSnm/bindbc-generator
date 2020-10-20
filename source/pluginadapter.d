@@ -4,9 +4,8 @@ import std.stdio;
 import std.string;
 import std.file;
 import std.path;
+import std.conv:to;
 
-import core.sys.posix.dlfcn;
-import core.sys.windows.dll;
 
 string[][] getExportedFunctions()
 {
@@ -17,59 +16,110 @@ string[][] getExportedFunctions()
         return [[]];
     }
     string[][] exporteds;
-    foreach(file; dirEntries("plugins", SpanMode.shallow))
+    foreach(string file; dirEntries("plugins", SpanMode.shallow))
     {
-        if(isDir("plugins/"~file))
+        if(isDir(file))
         {
-            exporteds~= ["plugins/"~file];
-            foreach(DirEntry plugin; dirEntries("plugins/"~file, SpanMode.shallow))
+            exporteds~= [file.baseName];
+            foreach(DirEntry plugin; dirEntries(file, "*.d", SpanMode.shallow))
             {
                 if(plugin.isFile)
                 {
-                    exporteds[exporteds.length - 1]~= plugin.name.stripExtension.capitalize;
+                    exporteds[exporteds.length - 1]~= plugin.name.stripExtension.baseName.capitalize;
                 }
             }
         }
     }
+    writeln(exporteds);
     return exporteds;
 }
 
+
+version(Posix)
+{
+    void* _dlopen(const scope char* dllName)
+    {
+        import core.sys.posix.dlfcn : dlopen, RTLD_LAZY;
+        return dlopen(dllName, RTLD_LAZY);
+    }
+}
 
 
 
 class PluginAdapter
 {
-    Plugin[] loadedPlugins;
+    static Plugin[] loadedPlugins;
 
-    Plugin function()[] loadFuncs;
+    static Plugin function()[] loadFuncs;
 
-    void*[] dlls;
+    static void*[] dlls;
 
-    void loadDLLFunc(string packName, string pluginName)
+    version(Windows)
     {
-        void* dll;
-        version(Posix)
+        import core.sys.windows.windows;
+        static alias loadDLL = LoadLibrary;
+        static const (char)* err;
+        static void* symbolLink(void* dll, const (char)* symbolName)
         {
-            dll = dlopen("libplugin"~packName~".so", RTLD_LAZY);
-            writeln("DLL was loaded");
-            loadFuncs~= cast(Plugin function())dlsym(dll, "export"~pluginName);
-            char* error = dlerror();
-            if(error)
-                writeln("DLsym error: ", error);
+            void* ret = GetProcAddress(dll, symbolName);
+            import std.conv:to;
+            if(!ret)
+                err = ("Could not link symbol "~to!string(symbolName)).ptr;
+            return ret;
         }
-        version(Windows)
+        static const(char)* dllError()
         {
-            
+            const(char)* ret = err;
+            err = null;
+            return ret;
         }
+    }
+    else version(Posix)
+    { 
+        import core.sys.posix.dlfcn;
+        static alias loadDLL = _dlopen;
+        static alias symbolLink = dlsym;
+        static alias dllError = dlerror;
+    }
+    else pragma(msg, "Current system does not support dll loading! Implement it yourself or open a new issue!");
+
+    
+    version(Posix)static const (char)* getPackName(string packName)
+    {
+        return "libplugin"~packName~".so";
+    }
+    version(Windows)static const (wchar)* getPackName(string packName)
+    {
+        return (to!wstring("libplugin"~packName~".dll")).ptr;
+    }
+
+    static void loadDLLFunc(void* dll, string pluginName)
+    {
+        void* symbol = symbolLink(dll, ("export"~pluginName).ptr);
+        const(char)* error = dllError();
+        if(error)
+            writeln("Dynamic Library symbol link error: ", error);
         dlls~= dll;
     }
 
-    void loadPlugins()
+    static void loadPlugins()
     {
         string[][] funcs = getExportedFunctions();
 
         for(ulong i = 0, len = funcs.length; i < len; i++)
+        {
+            void* dll = loadDLL(getPackName(funcs[i][0]));
+            if(!dll)
+            {
+                writeln("Could not load ", to!string(getPackName(funcs[i][0])));
+                continue;
+            }
             for(ulong j = 0, len2 = funcs[i].length; j < len2; j++)
-                loadDLLFunc(funcs[i][0], funcs[i][j]);
+            {
+                loadDLLFunc(dll, funcs[i][j]);
+
+            }
+
+        }
     }    
 }

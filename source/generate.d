@@ -352,6 +352,7 @@ string optFile;
 string optDppArgs;
 string optPresets;
 bool optNoTypes;
+bool optLoad;
 string optCustom;
 bool optFuncPrefix;
 
@@ -367,7 +368,8 @@ int main(string[] args)
             "presets|p", &optPresets,
             "notypes|n", &optNoTypes,
             "custom|c", &optCustom,
-            "use-func-prefix|u", &optFuncPrefix
+            "use-func-prefix|u", &optFuncPrefix,
+            "load|l", &optLoad
         );
     }
     catch(Exception e)
@@ -403,6 +405,16 @@ The postfix will be a predefined one for function format:
     Appends ^(?: at the start(The one which is meant to be ignored)
     Appends )(.+\);)$ at the end (Finish the ignored one and append the function $1 one)
 ";
+    //Plugin-load
+    helpInfo.options[6].help = r"
+Loads plugins located at the plugins folder. For the plugin being loaded it must:
+    1: Export a function named export(Modulename) which returns a Plugin instance.
+    2: Have a compiled .dll or .so following the scheme 'libpluginPLUGIN_FOLDER_NAME'
+        2.1: If you need many exports in a single dll, create a package.d with public imports and
+        compile it, plugin finding is first folder only, i.e: not recursive.
+";
+    if(optLoad)
+        PluginAdapter.loadPlugins();
     if(optPresets != "")
     {
         switch(optPresets)
