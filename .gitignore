@@ -17,4 +17,7 @@ bindbc-generate-test-*
 *.lst
 libclang.dll
 *.dpp
+*.def
+*.lib
+*.exp
 cimgui.h

@@ -5,6 +5,7 @@ import std.string;
 import std.file;
 import std.path;
 import std.conv:to;
+import std.process;
 
 
 string[][] getExportedFunctions()
@@ -57,7 +58,7 @@ class PluginAdapter
     version(Windows)
     {
         import core.sys.windows.windows;
-        static alias loadDLL = LoadLibrary;
+        static alias loadDLL = LoadLibraryA;
         static const (char)* err;
         static void* symbolLink(void* dll, const (char)* symbolName)
         {
@@ -88,9 +89,9 @@ class PluginAdapter
     {
         return "libplugin"~packName~".so";
     }
-    version(Windows)static const (wchar)* getPackName(string packName)
+    version(Windows)static const (char)* getPackName(string packName)
     {
-        return (to!wstring("libplugin"~packName~".dll")).ptr;
+        return ("libplugin"~packName~".dll").ptr;
     }
 
     static void loadDLLFunc(void* dll, string pluginName)
@@ -98,8 +99,68 @@ class PluginAdapter
         void* symbol = symbolLink(dll, ("export"~pluginName).ptr);
         const(char)* error = dllError();
         if(error)
-            writeln("Dynamic Library symbol link error: ", error);
+            writeln("Dynamic Library symbol link error: ", to!string(error));
         dlls~= dll;
+    }
+
+    static bool compilePluginDLL(string[] files)
+    {
+        import std.algorithm : countUntil;
+        if(countUntil(files, "Package") == -1)
+        {
+            writeln("package not found, creating it.");
+            string pkg;
+            import std.format : format;
+            import std.uni : toLower;
+            pkg = "module "~ files[0]~";\n";
+            pkg~="import plugin;";
+            for(size_t i = 1, len = files.length; i < len; i++)
+            {
+                if(files[i] != "Package") //Remember extension was stripped and it is capitalized 
+                    pkg~="\npublic import " ~ toLower(files[i])~";";
+            }
+            pkg~= "\n\nmixin PluginLoad;";
+            std.file.write("plugins/"~files[0]~"/package.d", pkg);
+        }
+        
+        string packName = to!string(getPackName(files[0]));
+        string[] compileCommand = 
+        [
+            "dmd", "-shared", 
+            "-odplugins/"~files[0]~"/obj",
+            "-ofplugins/"~files[0]~"/"~packName
+        ];
+        version(X86){compileCommand~= "-m32";}
+        else version(X86_64){compileCommand~= "-m64";}
+        else
+        {
+            writeln("Architecture unknown, omitting architecture command for compiler");
+        }
+        version(Windows)
+        {
+            //DLL Specific things.
+            string dllDef = "LIBRARY \"" ~ packName~"\"\n";
+            dllDef~="EXETYPE NT\n";
+            dllDef~="SUBSYSTEM WINDOWS\n";
+            dllDef~="CODE SHARED EXECUTE\n";
+            dllDef~="DATA WRITE";
+            string dllDefName = "plugins/"~files[0]~"/"~packName.stripExtension~".def";
+            if(!exists(dllDefName))
+                std.file.write(dllDefName, dllDef);
+            compileCommand~=dllDefName;
+            
+        }
+        compileCommand~= "source/plugin.d";
+        string path = "plugins/"~files[0]~"/";
+        for(size_t i = 1, len = files.length; i < len; i++)
+        {
+            compileCommand~= path~toLower(files[i])~".d";
+        }
+        writeln("Executing command '", compileCommand, "'");
+        auto ret = execute(compileCommand);
+        if(ret.status != 0)
+            writeln("DMD Log: \n\n\n", ret.output, "\n\n\n");
+        return true;
     }
 
     static void loadPlugins()
@@ -108,18 +169,30 @@ class PluginAdapter
 
         for(ulong i = 0, len = funcs.length; i < len; i++)
         {
-            void* dll = loadDLL(getPackName(funcs[i][0]));
-            if(!dll)
+            string packName = to!string(getPackName(funcs[i][0]));
+            string path = "plugins/"~funcs[i][0]~"/";
+            if(!exists(path~packName))
             {
-                writeln("Could not load ", to!string(getPackName(funcs[i][0])));
+                writeln(packName, " does not exists. Invoke dmd? y/n");
+                if(readln() == "y\n")
+                    compilePluginDLL(funcs[i]);
+                else
+                    return writeln("Compile the dll first!");
+            }
+            void* dll = loadDLL((path~packName).ptr);
+            
+            if(dll == null)
+            {
+                writeln("Could not load ", path~packName);
                 continue;
             }
-            for(ulong j = 0, len2 = funcs[i].length; j < len2; j++)
+            for(ulong j = 1, len2 = funcs[i].length; j < len2; j++)
             {
+                if(funcs[i][j] == "Package")
+                    continue;
                 loadDLLFunc(dll, funcs[i][j]);
 
             }
-
         }
     }    
 }

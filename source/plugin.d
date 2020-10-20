@@ -14,3 +14,9 @@ abstract class Plugin
     abstract void postTask();
     Plugin[] pluginHooks;
 }
+
+mixin template PluginLoad()
+{
+    import core.sys.windows.dll:SimpleDllMain;
+    mixin SimpleDllMain;
+}

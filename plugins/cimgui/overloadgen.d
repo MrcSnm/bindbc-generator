@@ -1,4 +1,5 @@
-module plugins.cimgui.overloadgen;
+module overloadgen;
+import plugin;
 import std.stdio;
 import std.json;
 import std.array : split;
@@ -146,8 +147,8 @@ static JSONValue defs = null;
 
 class CimGuiOverloadPlugin : Plugin
 {
-    string target(){return "cimgui-overloads";}
-    int main(string[] args)
+    override string target(){return "cimgui-overloads";}
+    override int main(string[] args)
     {
         if(args.length < 2)
         {
@@ -178,9 +179,10 @@ class CimGuiOverloadPlugin : Plugin
 
         return Plugin.SUCCESS;
     }
+    override void postTask(){}
 }
 
-export Plugin exportOverloadgen()
+extern(C) export Plugin exportOverloadgen()
 {
     return new CimGuiOverloadPlugin();
 }
