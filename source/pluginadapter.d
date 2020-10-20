@@ -31,7 +31,6 @@ string[][] getExportedFunctions()
             }
         }
     }
-    writeln(exporteds);
     return exporteds;
 }
 
@@ -49,9 +48,10 @@ version(Posix)
 
 class PluginAdapter
 {
-    static Plugin[] loadedPlugins;
+    static Plugin[string] loadedPlugins;
 
     static Plugin function()[] loadFuncs;
+
 
     static void*[] dlls;
 
@@ -100,7 +100,13 @@ class PluginAdapter
         const(char)* error = dllError();
         if(error)
             writeln("Dynamic Library symbol link error: ", to!string(error));
-        dlls~= dll;
+        else
+        {
+            Plugin function() getClass = cast(Plugin function())symbol;
+            Plugin p = getClass();
+            loadedPlugins[p.target] = p;
+            writeln("Loaded plugin '", p.target, "'");
+        }
     }
 
     static bool compilePluginDLL(string[] files)
@@ -180,19 +186,20 @@ class PluginAdapter
                     return writeln("Compile the dll first!");
             }
             void* dll = loadDLL((path~packName).ptr);
-            
             if(dll == null)
             {
                 writeln("Could not load ", path~packName);
                 continue;
             }
+            else
+                dlls~= dll;
             for(ulong j = 1, len2 = funcs[i].length; j < len2; j++)
             {
                 if(funcs[i][j] == "Package")
                     continue;
                 loadDLLFunc(dll, funcs[i][j]);
-
             }
+            
         }
     }    
 }
