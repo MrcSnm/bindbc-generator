@@ -148,6 +148,10 @@ static JSONValue defs = null;
 class CimGuiOverloadPlugin : Plugin
 {
     override string target(){return "cimgui-overloads";}
+    override string convertToD_Pipe()
+    {
+        return storedStr;
+    }
     override int main(string[] args)
     {
         if(args.length < 2)
@@ -179,7 +183,10 @@ class CimGuiOverloadPlugin : Plugin
 
         return Plugin.SUCCESS;
     }
-    override void postTask(){}
+    override void onReturnControl(string processedStr)
+    {
+
+    }
 }
 
 extern(C) export Plugin exportOverloadgen()

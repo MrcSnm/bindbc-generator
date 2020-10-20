@@ -7,11 +7,28 @@ module plugin;
 */
 abstract class Plugin
 {
+    /**
+    *   If it returned from main, the plugin should be processed
+    */
     static int SUCCESS = 1;
+    /**
+    *   Should not process plugin
+    */
     static int ERROR = 0;
+    /**
+    *   Target for getting the options inside bindbc-generate
+    */
     abstract string target();
     abstract int main(string[] args);
-    abstract void postTask();
+    /**
+    *   Executed after main
+    */
+    abstract string convertToD_Pipe();
+
+    /**
+    *   Executed after generate processing
+    */
+    abstract void onReturnControl(string processedStr);
     Plugin[] pluginHooks;
 }
 

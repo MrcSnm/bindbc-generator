@@ -15,6 +15,7 @@ import std.regex : replaceAll, matchAll, regex, Regex;
 import std.path:baseName, stripExtension;
 import std.stdio:writeln, File;
 import pluginadapter;
+import plugin;
 
 
 enum D_TO_REPLACE
@@ -355,6 +356,36 @@ bool optNoTypes;
 bool optLoad;
 string optCustom;
 bool optFuncPrefix;
+string[] usingPlugins;
+string[][string] pluginArgs;
+
+
+enum ReservedArgs : string
+{
+    D_CONV = "d-conv"
+}
+
+Plugin[] getDConvPlugins(string[] plugins)
+{
+    Plugin[] ret;
+    import std.algorithm : countUntil;
+    foreach(plugin; plugins)
+    {
+        string[] args = pluginArgs[plugin];
+        long ind = countUntil(args, ReservedArgs.D_CONV);
+        if(ind != -1)
+        {
+            if(ind != args.length)
+                pluginArgs[plugin] = args[0..ind] ~ args[ind+1..$];
+            else
+                pluginArgs[plugin] = args[0..ind];
+            ret~= PluginAdapter.loadedPlugins[plugin];
+        }
+    }
+    return ret;
+}
+
+
 
 int main(string[] args)
 {
@@ -369,7 +400,9 @@ int main(string[] args)
             "notypes|n", &optNoTypes,
             "custom|c", &optCustom,
             "use-func-prefix|u", &optFuncPrefix,
-            "load|l", &optLoad
+            "load|l", &optLoad,
+            "load-plugins", &usingPlugins,
+            "plugin-args|a", &pluginArgs
         );
     }
     catch(Exception e)
@@ -413,8 +446,20 @@ Loads plugins located at the plugins folder. For the plugin being loaded it must
         2.1: If you need many exports in a single dll, create a package.d with public imports and
         compile it, plugin finding is first folder only, i.e: not recursive.
 ";
+    helpInfo.options[8].help = r"
+Plugins arguments to pass into the entrance point.
+Reserved arguments are:
+    d-conv -> Converts from C to D
+";
     if(optLoad)
+    {
         PluginAdapter.loadPlugins();
+        foreach(p; usingPlugins)
+        {
+            PluginAdapter.checkReservedArgs(p);
+        }
+
+    }
     if(optPresets != "")
     {
         switch(optPresets)

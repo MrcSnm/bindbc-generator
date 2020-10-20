@@ -91,7 +91,7 @@ class PluginAdapter
     }
     version(Windows)static const (char)* getPackName(string packName)
     {
-        return ("libplugin"~packName~".dll").ptr;
+        return "libplugin"~packName~".dll";
     }
 
     static void loadDLLFunc(void* dll, string pluginName)
@@ -201,5 +201,7 @@ class PluginAdapter
             }
             
         }
-    }    
+    }
+
+    
 }
