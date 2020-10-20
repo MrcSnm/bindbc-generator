@@ -14,6 +14,7 @@ import std.getopt;
 import std.regex : replaceAll, matchAll, regex, Regex;
 import std.path:baseName, stripExtension;
 import std.stdio:writeln, File;
+import pluginadapter;
 
 
 enum D_TO_REPLACE
