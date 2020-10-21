@@ -87,11 +87,11 @@ class PluginAdapter
     
     version(Posix)static const (char)* getPackName(string packName)
     {
-        return "libplugin"~packName~".so";
+        return ("libplugin"~packName~".so").ptr;
     }
     version(Windows)static const (char)* getPackName(string packName)
     {
-        return "libplugin"~packName~".dll";
+        return ("libplugin"~packName~".dll").ptr;
     }
 
     static void loadDLLFunc(void* dll, string pluginName)
@@ -169,12 +169,16 @@ class PluginAdapter
         return true;
     }
 
-    static void loadPlugins()
+    static string[] loadPlugins(string[] plugins)
     {
         string[][] funcs = getExportedFunctions();
+        import std.algorithm : countUntil;
 
+        string[] pluginsLoaded;
         for(ulong i = 0, len = funcs.length; i < len; i++)
         {
+            if(plugins.length != 0 && countUntil(plugins, funcs[i][0]) == -1)
+                continue;
             string packName = to!string(getPackName(funcs[i][0]));
             string path = "plugins/"~funcs[i][0]~"/";
             if(!exists(path~packName))
@@ -183,7 +187,11 @@ class PluginAdapter
                 if(readln() == "y\n")
                     compilePluginDLL(funcs[i]);
                 else
-                    return writeln("Compile the dll first!");
+                {
+                    writeln("Compile the dll first!");
+                    continue;
+                }
+                    
             }
             void* dll = loadDLL((path~packName).ptr);
             if(dll == null)
@@ -192,7 +200,10 @@ class PluginAdapter
                 continue;
             }
             else
+            {
+                pluginsLoaded~= funcs[i][0];
                 dlls~= dll;
+            }
             for(ulong j = 1, len2 = funcs[i].length; j < len2; j++)
             {
                 if(funcs[i][j] == "Package")
@@ -201,7 +212,6 @@ class PluginAdapter
             }
             
         }
-    }
-
-    
+        return pluginsLoaded;
+    }    
 }

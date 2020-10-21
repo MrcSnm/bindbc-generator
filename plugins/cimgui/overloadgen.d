@@ -147,6 +147,7 @@ static JSONValue defs = null;
 
 class CimGuiOverloadPlugin : Plugin
 {
+    string storedStr;
     override string target(){return "cimgui-overloads";}
     override string convertToD_Pipe()
     {
@@ -187,6 +188,7 @@ class CimGuiOverloadPlugin : Plugin
     {
 
     }
+    override string getHelpInformation(){return "";}
 }
 
 extern(C) export Plugin exportOverloadgen()

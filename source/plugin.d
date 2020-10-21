@@ -29,6 +29,9 @@ abstract class Plugin
     *   Executed after generate processing
     */
     abstract void onReturnControl(string processedStr);
+
+    abstract string getHelpInformation();
+    public bool hasFinishedExecution;
     Plugin[] pluginHooks;
 }
 

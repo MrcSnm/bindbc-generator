@@ -356,29 +356,32 @@ bool optNoTypes;
 bool optLoad;
 string optCustom;
 bool optFuncPrefix;
-string[] usingPlugins;
-string[][string] pluginArgs;
+string[] optUsingPlugins = [];
+bool optLoadAll;
+string[][string] optPluginArgs;
 
 
 enum ReservedArgs : string
 {
     D_CONV = "d-conv"
 }
-
+/**
+*   Already removes d-conv from the args
+*/
 Plugin[] getDConvPlugins(string[] plugins)
 {
     Plugin[] ret;
     import std.algorithm : countUntil;
     foreach(plugin; plugins)
     {
-        string[] args = pluginArgs[plugin];
+        string[] args = optPluginArgs[plugin];
         long ind = countUntil(args, ReservedArgs.D_CONV);
         if(ind != -1)
         {
             if(ind != args.length)
-                pluginArgs[plugin] = args[0..ind] ~ args[ind+1..$];
+                optPluginArgs[plugin] = args[0..ind] ~ args[ind+1..$];
             else
-                pluginArgs[plugin] = args[0..ind];
+                optPluginArgs[plugin] = args[0..ind];
             ret~= PluginAdapter.loadedPlugins[plugin];
         }
     }
@@ -400,9 +403,9 @@ int main(string[] args)
             "notypes|n", &optNoTypes,
             "custom|c", &optCustom,
             "use-func-prefix|u", &optFuncPrefix,
-            "load|l", &optLoad,
-            "load-plugins", &usingPlugins,
-            "plugin-args|a", &pluginArgs
+            "load-plugins|l", &optUsingPlugins,
+            "load-all", &optLoadAll,
+            "plugin-args|a", &optPluginArgs
         );
     }
     catch(Exception e)
@@ -446,20 +449,51 @@ Loads plugins located at the plugins folder. For the plugin being loaded it must
         2.1: If you need many exports in a single dll, create a package.d with public imports and
         compile it, plugin finding is first folder only, i.e: not recursive.
 ";
+    helpInfo.options[7].help = r"
+Loads every plugin located at the plugis folder";
     helpInfo.options[8].help = r"
 Plugins arguments to pass into the entrance point.
+Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
+to pass only the current working dir.
 Reserved arguments are:
     d-conv -> Converts from C to D
 ";
-    if(optLoad)
+    if(optUsingPlugins.length != 0 || optLoadAll)
     {
-        PluginAdapter.loadPlugins();
-        foreach(p; usingPlugins)
+        if(optLoadAll)
+            optUsingPlugins = PluginAdapter.loadPlugins(optUsingPlugins);
+        else
+            PluginAdapter.loadPlugins(optUsingPlugins);
+        int nullCount = 0;
+        if(optUsingPlugins.length == 0)
         {
-            PluginAdapter.checkReservedArgs(p);
+            writeln("\n\nERROR!\nCould not load any plugin!");
+            return ERROR;
         }
-
+        foreach(p; optPluginArgs)
+        {
+            if(p.length == 0)
+                nullCount++;
+        }
+        if(nullCount == optPluginArgs.length)
+        {
+            writeln(r"
+Plugins loaded but none was specified for execution!
+For executing it, you must at least specify one plugin arg.
+Showing loaded plugins help info:");
+            foreach(k, v; PluginAdapter.loadedPlugins)
+            {
+                if(v.getHelpInformation() == "")
+                    writeln("\n\nWARNING!\n\nContact ", k, " provider! No help information is given");
+                else
+                    writeln("\n\n", k,
+r"--------------------------------",
+v.getHelpInformation());
+            }
+            return ERROR;
+        }
     }
+    Plugin[] toConv = getDConvPlugins(optUsingPlugins);
     if(optPresets != "")
     {
         switch(optPresets)
@@ -496,10 +530,11 @@ Just create an issue or a pull request on https://www.github.com/MrcSnm/bindbc-g
         writeln("Regex Generated:\n\t"~targetReg.toString);
     }
 
-    if(helpInfo.helpWanted || (optFile == ""))
+    if(helpInfo.helpWanted || (optFile == "" && optUsingPlugins.length == 0))
     {
-        if(optFile == "")
-            writeln("File options is missing, you should always specify the target!");
+        if(optFile == "" && optUsingPlugins.length == 0)
+            writeln("File options is missing, you should always specify the target or specify a plugin!");
+        
         defaultGetoptPrinter(r"
 Bindbc-generator options.
 If you find an issue with the content generation, report it at
@@ -541,7 +576,7 @@ Functions definitions comes from the .h file specified
 
     //It will already remove darrFuncs params
     string libName = stripExtension(_f);
-    createFuncsFile(libName, darrFuncs);     
+    createFuncsFile(libName, darrFuncs);
     createLibLoad(libName, darrFuncs);    
     createPackage(libName);
 
