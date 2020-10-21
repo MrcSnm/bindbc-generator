@@ -268,8 +268,14 @@ class CimGuiOverloadPlugin : Plugin
             s~= generateAliasOverload();
         s~="\n";
         
-
-        write("overloads.d", s~processedStr);
+        if(outputPath)
+        {
+            if(outputPath[$-1] == "/")
+                outputPath = outputPath[0..$-1];
+            write(outputPath~"/overloads.d", s~processedStr);
+        }
+        else
+            write("overloads.d", s~processedStr);
         return Plugin.SUCCESS;
     }
     override string getHelpInformation()
