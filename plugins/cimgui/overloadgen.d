@@ -120,7 +120,7 @@ static void getParameters(ref Function func, ref OverloadedFunction overload)
     }
 }
 
-static void generateOverloads(Function[] funcs)
+static string generateOverloads(Function[] funcs)
 {
     string fileContent = "";
     string line = "";
@@ -137,7 +137,7 @@ static void generateOverloads(Function[] funcs)
             fileContent~= line~"\n";
         }
     }
-    writeln(fileContent);
+    return fileContent;
 }
 
 
@@ -179,7 +179,7 @@ class CimGuiOverloadPlugin : Plugin
         {
             File f = File(filePath);
             Function[] funcs = getFunctions(f);
-            generateOverloads(funcs);
+            storedStr = generateOverloads(funcs);
         }
 
         return Plugin.SUCCESS;
@@ -188,7 +188,13 @@ class CimGuiOverloadPlugin : Plugin
     {
 
     }
-    override string getHelpInformation(){return "";}
+    override string getHelpInformation()
+    {
+        return r"This plugin was made to be used in conjunction with BindBC-Generator, located on
+https://github.com/MrcSnm/bindbc-generator
+
+The argument must be 'cimgui' path, it will look for definitions.json and overloads.txt ";
+    }
 }
 
 extern(C) export Plugin exportOverloadgen()

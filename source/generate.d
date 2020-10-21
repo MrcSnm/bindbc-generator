@@ -368,24 +368,40 @@ enum ReservedArgs : string
 /**
 *   Already removes d-conv from the args
 */
-Plugin[] getDConvPlugins(string[] plugins)
+Plugin[] getDConvPlugins()
 {
     Plugin[] ret;
     import std.algorithm : countUntil;
-    foreach(plugin; plugins)
+    foreach(pluginName, args; optPluginArgs)
     {
-        string[] args = optPluginArgs[plugin];
         long ind = countUntil(args, ReservedArgs.D_CONV);
         if(ind != -1)
         {
             if(ind != args.length)
-                optPluginArgs[plugin] = args[0..ind] ~ args[ind+1..$];
+                optPluginArgs[pluginName] = args[0..ind] ~ args[ind+1..$];
             else
-                optPluginArgs[plugin] = args[0..ind];
-            ret~= PluginAdapter.loadedPlugins[plugin];
+                optPluginArgs[pluginName] = args[0..ind];
+            ret~= PluginAdapter.loadedPlugins[pluginName];
         }
     }
     return ret;
+}
+
+void pluginArgsHandler(string opt, string value)
+{
+    import std.array:split;
+    import std.algorithm:countUntil;
+    if(opt == "plugin-args|a")
+    {
+        if(value.countUntil("=") == -1)
+            return writeln("plugin-args wrong formatting!");
+        string[] v = value.split("=");
+        string pluginName = v[0];
+        if(v[1].countUntil("[") != -1 && v[1].countUntil("]") == v[1].length - 1)
+            optPluginArgs[pluginName]~= v[1][1..$-1].split(" ");
+        else
+            optPluginArgs[pluginName]~= v[1];
+    }
 }
 
 
@@ -405,13 +421,13 @@ int main(string[] args)
             "use-func-prefix|u", &optFuncPrefix,
             "load-plugins|l", &optUsingPlugins,
             "load-all", &optLoadAll,
-            "plugin-args|a", &optPluginArgs
+            "plugin-args|a", &pluginArgsHandler
         );
     }
     catch(Exception e)
     {
         writeln(e.msg);
-        return ERROR;
+        return Plugin.ERROR;
     }
     //I don't really understand what type is regex...
     Regex!char targetReg;
@@ -455,6 +471,9 @@ Loads every plugin located at the plugis folder";
 Plugins arguments to pass into the entrance point.
 Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
 to pass only the current working dir.
+
+Example on multiple args-> -a myplugin=[arg1 arg2 arg3]
+
 Reserved arguments are:
     d-conv -> Converts from C to D
 ";
@@ -468,7 +487,7 @@ Reserved arguments are:
         if(optUsingPlugins.length == 0)
         {
             writeln("\n\nERROR!\nCould not load any plugin!");
-            return ERROR;
+            return Plugin.ERROR;
         }
         foreach(p; optPluginArgs)
         {
@@ -486,14 +505,15 @@ Showing loaded plugins help info:");
                 if(v.getHelpInformation() == "")
                     writeln("\n\nWARNING!\n\nContact ", k, " provider! No help information is given");
                 else
-                    writeln("\n\n", k,
+                    writeln("\n\n", k, "\n\n",
 r"--------------------------------",
 v.getHelpInformation());
             }
-            return ERROR;
+            return Plugin.ERROR;
         }
     }
-    Plugin[] toConv = getDConvPlugins(optUsingPlugins);
+    Plugin[] toConv = getDConvPlugins();
+    writeln(toConv);
     if(optPresets != "")
     {
         switch(optPresets)
@@ -556,19 +576,19 @@ Functions definitions comes from the .h file specified
         }
         File f = createDppFile(_f);
         if(f.name == "")
-            return ERROR;
+            return Plugin.ERROR;
         executeDpp(f, optDppArgs);
     }
     if(optPresets == "" && optCustom == "")
     {
         writeln("ERROR:\nNo regex nor presets for getting functions specified\n");
-        return ERROR;
+        return Plugin.ERROR;
     }
     string funcs = getFuncs(_f, targetReg);
     if(funcs == "")
     {
         writeln("ERROR:\nNo hit was made by your function");
-        return ERROR;
+        return Plugin.ERROR;
     }
     string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
     string dfuncs = cppFuncsToD(cleanFuncs);
@@ -582,5 +602,5 @@ Functions definitions comes from the .h file specified
 
     if(!optNoTypes)
         remove(_f.stripExtension ~ ".d");
-    return 1;
+    return Plugin.SUCCESS;
 } 

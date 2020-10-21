@@ -19,6 +19,9 @@ abstract class Plugin
     *   Target for getting the options inside bindbc-generate
     */
     abstract string target();
+    /**
+    *   Wether convertToD_Pipe can be called
+    */
     abstract int main(string[] args);
     /**
     *   Executed after main
