@@ -346,7 +346,6 @@ public import bindbc.$.types;
 }
 
 
-
 enum ERROR = -1;
 
 string optFile;
@@ -359,6 +358,8 @@ bool optFuncPrefix;
 string[] optUsingPlugins = [];
 bool optLoadAll;
 string[][string] optPluginArgs;
+bool optRecompile;
+bool optDebug;
 
 
 enum ReservedArgs : string
@@ -366,11 +367,10 @@ enum ReservedArgs : string
     D_CONV = "d-conv"
 }
 /**
-*   Already removes d-conv from the args
+*   Remove d-conv from the args and sets willConvertToD to true
 */
-Plugin[] getDConvPlugins()
+void getDConvPlugins()
 {
-    Plugin[] ret;
     import std.algorithm : countUntil;
     foreach(pluginName, args; optPluginArgs)
     {
@@ -381,10 +381,9 @@ Plugin[] getDConvPlugins()
                 optPluginArgs[pluginName] = args[0..ind] ~ args[ind+1..$];
             else
                 optPluginArgs[pluginName] = args[0..ind];
-            ret~= PluginAdapter.loadedPlugins[pluginName];
+            PluginAdapter.loadedPlugins[pluginName].willConvertToD = true;
         }
     }
-    return ret;
 }
 
 void pluginArgsHandler(string opt, string value)
@@ -404,34 +403,74 @@ void pluginArgsHandler(string opt, string value)
     }
 }
 
-
-
-int main(string[] args)
+void playPlugins(string cwd)
 {
-    GetoptResult helpInfo;
-    try
+    foreach(pluginName, pluginArgs; optPluginArgs)
     {
-        helpInfo = getopt(
-            args,
-            "dpparg|d", &optDppArgs,
-            "file|f", &optFile,
-            "presets|p", &optPresets,
-            "notypes|n", &optNoTypes,
-            "custom|c", &optCustom,
-            "use-func-prefix|u", &optFuncPrefix,
-            "load-plugins|l", &optUsingPlugins,
-            "load-all", &optLoadAll,
-            "plugin-args|a", &pluginArgsHandler
-        );
+        Plugin p = PluginAdapter.loadedPlugins[pluginName];
+        writeln("'", pluginName, "' under execution with arguments ", cwd~pluginArgs, "\n\n\n");
+        int retVal = p.main(cwd ~ pluginArgs);
+        if(retVal == Plugin.SUCCESS)
+        {
+            if(p.willConvertToD)
+            {
+                string processed = cppFuncsToD(p.convertToD_Pipe());
+                p.onReturnControl(processed);
+                writeln("'", pluginName, "' finished tasks.\n\n\n");
+            }
+            p.hasFinishedExecution = true;
+        }
+        else
+        {
+            writeln("Error ocurred while executing '", pluginName, "'!\n\t->", p.error);
+        }
     }
-    catch(Exception e)
-    {
-        writeln(e.msg);
-        return Plugin.ERROR;
-    }
-    //I don't really understand what type is regex...
-    Regex!char targetReg;
+}
 
+void checkPresets(ref Regex!char targetReg)
+{
+    if(optPresets != "")
+    {
+        switch(optPresets)
+        {
+            case "cimgui":
+                targetReg = Presets.cimguiFuncs;
+                optDppArgs = "--parse-as-cpp,--define CIMGUI_DEFINE_ENUMS_AND_STRUCTS";
+                if(optFile == "")
+                    optFile = "cimgui.h";
+                break;
+            default:
+                writeln("Preset named '"~optPresets~"' does not exists");
+                break;
+        }
+    }
+}
+
+void checkCustomRegex(ref Regex!char targetReg)
+{
+    if(optPresets == "" && optCustom != "")
+    {
+        writeln("
+Please consider adding your custom function getter to the list.
+Just create an issue or a pull request on https://www.github.com/MrcSnm/bindbc-generator
+");
+        string reg;
+        if(optFuncPrefix)
+        {
+            reg~=r"^(?:";
+            reg~=optCustom;
+            reg~=r")(.+\);)$";
+        }
+        else
+            reg~= optCustom;
+        writeln("Compiling regex");
+        targetReg = regex(reg, "mg"); //Auto converts single slash to double for easier usage
+        writeln("Regex Generated:\n\t"~targetReg.toString);
+    }
+}
+
+void helpInfoSetup(ref GetoptResult helpInfo)
+{
     //Dpparg
     helpInfo.options[0].help = "Arguments to be appended to dpp, --preprocess-only is always included. Pass multiple arguments via comma";
     //File
@@ -465,8 +504,10 @@ Loads plugins located at the plugins folder. For the plugin being loaded it must
         2.1: If you need many exports in a single dll, create a package.d with public imports and
         compile it, plugin finding is first folder only, i.e: not recursive.
 ";
+    //Load all
     helpInfo.options[7].help = r"
 Loads every plugin located at the plugis folder";
+    //Plugins args
     helpInfo.options[8].help = r"
 Plugins arguments to pass into the entrance point.
 Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
@@ -477,17 +518,45 @@ Example on multiple args-> -a myplugin=[arg1 arg2 arg3]
 Reserved arguments are:
     d-conv -> Converts from C to D
 ";
+    //Recompile
+    helpInfo.options[9].help = r"
+Using this option will force a recompilation of the plugins!";
+    //Debug
+    helpInfo.options[10].help = r"
+Compile dynamic libraries with debug symbols enabled";
+}
+
+bool checkHelpNeeded(ref GetoptResult helpInfo)
+{
+    if(helpInfo.helpWanted || (optFile == "" && optUsingPlugins.length == 0))
+    {
+        if(optFile == "" && optUsingPlugins.length == 0)
+            writeln("File options is missing, you should always specify the target or specify a plugin!");
+        
+        defaultGetoptPrinter(r"
+Bindbc-generator options.
+If you find an issue with the content generation, report it at
+https://www.github.com/MrcSnm/bindbc-generator
+",
+        helpInfo.options);
+        return true;
+    }
+    return false;
+}
+
+bool checkPluginLoad()
+{
     if(optUsingPlugins.length != 0 || optLoadAll)
     {
         if(optLoadAll)
-            optUsingPlugins = PluginAdapter.loadPlugins(optUsingPlugins);
+            optUsingPlugins = PluginAdapter.loadPlugins(optUsingPlugins, optRecompile, optDebug);
         else
-            PluginAdapter.loadPlugins(optUsingPlugins);
+            PluginAdapter.loadPlugins(optUsingPlugins, optRecompile, optDebug);
         int nullCount = 0;
         if(optUsingPlugins.length == 0)
         {
             writeln("\n\nERROR!\nCould not load any plugin!");
-            return Plugin.ERROR;
+            return false;
         }
         foreach(p; optPluginArgs)
         {
@@ -509,60 +578,14 @@ Showing loaded plugins help info:");
 r"--------------------------------",
 v.getHelpInformation());
             }
-            return Plugin.ERROR;
+            return false;
         }
     }
-    Plugin[] toConv = getDConvPlugins();
-    writeln(toConv);
-    if(optPresets != "")
-    {
-        switch(optPresets)
-        {
-            case "cimgui":
-                targetReg = Presets.cimguiFuncs;
-                optDppArgs = "--parse-as-cpp,--define CIMGUI_DEFINE_ENUMS_AND_STRUCTS";
-                if(optFile == "")
-                    optFile = "cimgui.h";
-                break;
-            default:
-                writeln("Preset named '"~optPresets~"' does not exists");
-                break;
-        }
-    }
+    return true;
+}
 
-    if(optPresets == "" && optCustom != "")
-    {
-        writeln("
-Please consider adding your custom function getter to the list.
-Just create an issue or a pull request on https://www.github.com/MrcSnm/bindbc-generator
-");
-        string reg;
-        if(optFuncPrefix)
-        {
-            reg~=r"^(?:";
-            reg~=optCustom;
-            reg~=r")(.+\);)$";
-        }
-        else
-            reg~= optCustom;
-        writeln("Compiling regex");
-        targetReg = regex(reg, "mg"); //Auto converts single slash to double for easier usage
-        writeln("Regex Generated:\n\t"~targetReg.toString);
-    }
-
-    if(helpInfo.helpWanted || (optFile == "" && optUsingPlugins.length == 0))
-    {
-        if(optFile == "" && optUsingPlugins.length == 0)
-            writeln("File options is missing, you should always specify the target or specify a plugin!");
-        
-        defaultGetoptPrinter(r"
-Bindbc-generator options.
-If you find an issue with the content generation, report it at
-https://www.github.com/MrcSnm/bindbc-generator
-",
-        helpInfo.options);
-        return 1;
-    }
+bool checkDppExecution()
+{
     string _f = optFile;
     if(!optNoTypes)
     {
@@ -570,37 +593,99 @@ https://www.github.com/MrcSnm/bindbc-generator
         {
             writeln(r"
 No dpp arg specified!
-Beware that for this project it is used for generating struct and enums ONLY
-Functions definitions comes from the .h file specified
+Beware that for this project uses dpp for generating struct and enums ONLY
+Functions definitions comes from the .h file specified and then replaces with
+D style
 ");
         }
         File f = createDppFile(_f);
         if(f.name == "")
-            return Plugin.ERROR;
+            return false;
         executeDpp(f, optDppArgs);
     }
-    if(optPresets == "" && optCustom == "")
+    return true;
+}
+
+bool checkPluginOnly()
+{
+    return (optFile == "" && optPresets == "" && optCustom == "" && optDppArgs == "" &&
+    (optUsingPlugins.length != 0 || optLoadAll));
+}
+
+int main(string[] args)
+{
+    GetoptResult helpInfo;
+    try
     {
-        writeln("ERROR:\nNo regex nor presets for getting functions specified\n");
+        helpInfo = getopt(
+            args,
+            "dpparg|d", &optDppArgs,
+            "file|f", &optFile,
+            "presets|p", &optPresets,
+            "notypes|n", &optNoTypes,
+            "custom|c", &optCustom,
+            "use-func-prefix|u", &optFuncPrefix,
+            "load-plugins|l", &optUsingPlugins,
+            "load-all", &optLoadAll,
+            "plugin-args|a", &pluginArgsHandler,
+            "recompile|r", &optRecompile,
+            "debug", &optDebug
+        );
+    }
+    catch(Exception e)
+    {
+        writeln(e.msg);
         return Plugin.ERROR;
     }
-    string funcs = getFuncs(_f, targetReg);
-    if(funcs == "")
-    {
-        writeln("ERROR:\nNo hit was made by your function");
+    helpInfoSetup(helpInfo);
+    //I don't really understand what type is regex...
+    Regex!char targetReg;
+
+    if(!checkPluginLoad())
         return Plugin.ERROR;
+    getDConvPlugins();
+
+    bool pluginOnly = checkPluginOnly();
+
+    if(!pluginOnly)
+    {
+        checkPresets(targetReg);
+        checkCustomRegex(targetReg);
     }
-    string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
-    string dfuncs = cppFuncsToD(cleanFuncs);
-    string[] darrFuncs = dfuncs.split("\n");
 
-    //It will already remove darrFuncs params
-    string libName = stripExtension(_f);
-    createFuncsFile(libName, darrFuncs);
-    createLibLoad(libName, darrFuncs);    
-    createPackage(libName);
+    if(checkHelpNeeded(helpInfo))
+        return 1;
+    
+    if(!pluginOnly)
+    {
+        if(!checkDppExecution())
+            return Plugin.ERROR;
+        if(optPresets == "" && optCustom == "")
+        {
+            writeln("ERROR:\nNo regex nor presets for getting functions specified\n");
+            return Plugin.ERROR;
+        }
+        string funcs = getFuncs(optFile, targetReg);
+        if(funcs == "")
+        {
+            writeln("ERROR:\nNo hit was made by your function");
+            return Plugin.ERROR;
+        }
+        string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
+        string dfuncs = cppFuncsToD(cleanFuncs);
+        string[] darrFuncs = dfuncs.split("\n");
 
-    if(!optNoTypes)
-        remove(_f.stripExtension ~ ".d");
+        //It will already remove darrFuncs params
+        string libName = stripExtension(optFile);
+        createFuncsFile(libName, darrFuncs);
+        createLibLoad(libName, darrFuncs);    
+        createPackage(libName);
+
+        if(!optNoTypes)
+            remove(optFile.stripExtension ~ ".d");
+    }
+    writeln(args[0]);
+    playPlugins(args[0]);
+    
     return Plugin.SUCCESS;
 } 

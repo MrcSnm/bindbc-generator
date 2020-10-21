@@ -144,6 +144,15 @@ static string generateOverloads(Function[] funcs)
 static JSONValue defs = null;
 //Will only receive the path to overloads.txt
 
+string getOverloadsPath(string cimguiPath)
+{
+    return cimguiPath~"/generator/output/overloads.txt";
+}
+string getDefinitionsPath(string cimguiPath)
+{
+    return cimguiPath~"/generator/output/definitions.json";
+}
+
 
 class CimGuiOverloadPlugin : Plugin
 {
@@ -156,37 +165,30 @@ class CimGuiOverloadPlugin : Plugin
     override int main(string[] args)
     {
         if(args.length < 2)
-        {
-            writeln("No path for the overloads.txt provided!");
-            return Plugin.ERROR;
-        }
-        else if(args.length == 2)
-        {
-            writeln("\n\nYou can provide definitions.json for mantaining parameters names!\n\n\n------\n\n\n");
-        }
-        else
-        {
-            if(exists(args[2]))
-                defs = parseJSON(readText(args[2]));
-            else
-            {
-                writeln("File " ~ args[2] ~ "does not exists");
-                return Plugin.ERROR;
-            }
-        }
-        string filePath = args[1];
-        if(exists(filePath))
-        {
-            File f = File(filePath);
-            Function[] funcs = getFunctions(f);
-            storedStr = generateOverloads(funcs);
-        }
+            return returnError("Argument Expected:\nNo path for cimgui provided!");
+        string cimguiPath = args[1];
+        if(!exists(cimguiPath))
+            return returnError("Cimgui directory '"~cimguiPath~"' not found");
+        string overloads = getOverloadsPath(cimguiPath);
+        string defsPath = getDefinitionsPath(cimguiPath);
+
+        if(!exists(overloads))
+            return returnError("Overloads path '"~overloads~"' does not exists");
+        if(!exists(defsPath))
+            return returnError("Definitions path '"~defsPath~"' does not exists");
+        
+        writeln("Hello!");
+        defs = parseJSON(readText(args[2]));
+
+        File f = File(overloads);
+        Function[] funcs = getFunctions(f);
+        storedStr = generateOverloads(funcs);
 
         return Plugin.SUCCESS;
     }
     override void onReturnControl(string processedStr)
     {
-
+        writeln(processedStr);
     }
     override string getHelpInformation()
     {
@@ -195,6 +197,7 @@ https://github.com/MrcSnm/bindbc-generator
 
 The argument must be 'cimgui' path, it will look for definitions.json and overloads.txt ";
     }
+
 }
 
 extern(C) export Plugin exportOverloadgen()

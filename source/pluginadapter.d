@@ -109,7 +109,7 @@ class PluginAdapter
         }
     }
 
-    static bool compilePluginDLL(string[] files)
+    static bool compilePluginDLL(string[] files, bool optDebug)
     {
         import std.algorithm : countUntil;
         if(countUntil(files, "Package") == -1)
@@ -136,6 +136,8 @@ class PluginAdapter
             "-odplugins/"~files[0]~"/obj",
             "-ofplugins/"~files[0]~"/"~packName
         ];
+        if(optDebug)
+            compileCommand~="-g";
         version(X86){compileCommand~= "-m32";}
         else version(X86_64){compileCommand~= "-m64";}
         else
@@ -169,7 +171,27 @@ class PluginAdapter
         return true;
     }
 
-    static string[] loadPlugins(string[] plugins)
+    static void clean(string dllName)
+    {
+        string bName = dllName.stripExtension;
+        with(std.file)
+        {
+            writeln(bName);
+            if(exists(dllName))
+                remove(dllName);
+            if(exists(bName~".def"))
+                remove(bName~".def");
+            if(exists(bName~".exp"))
+                remove(bName~".exp");
+            if(exists(bName~".lib"))
+                remove(bName~".lib");
+            if(exists(bName~".pdb"))
+                remove(bName~".pdb");
+        }
+        
+    }
+
+    static string[] loadPlugins(string[] plugins, bool regenerate, bool optDebug)
     {
         string[][] funcs = getExportedFunctions();
         import std.algorithm : countUntil;
@@ -181,16 +203,25 @@ class PluginAdapter
                 continue;
             string packName = to!string(getPackName(funcs[i][0]));
             string path = "plugins/"~funcs[i][0]~"/";
-            if(!exists(path~packName))
+            if(!exists(path~packName) || regenerate)
             {
-                writeln(packName, " does not exists. Invoke dmd? y/n");
-                if(readln() == "y\n")
-                    compilePluginDLL(funcs[i]);
+                if(!regenerate)
+                {
+                    writeln(packName, " does not exists. Invoke dmd? y/n");
+                    if(readln() == "y\n")
+                        compilePluginDLL(funcs[i], optDebug);
+                    else
+                    {
+                        writeln("Compile the dll first!");
+                        continue;
+                    }
+                }
                 else
                 {
-                    writeln("Compile the dll first!");
-                    continue;
+                    clean(path~packName);
+                    compilePluginDLL(funcs[i], optDebug);
                 }
+               
                     
             }
             void* dll = loadDLL((path~packName).ptr);
