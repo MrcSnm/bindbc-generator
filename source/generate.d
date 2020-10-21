@@ -30,9 +30,14 @@ enum D_TO_REPLACE
     _out = " out_",
     _align = " align_",
     _ref = " ref_",
+    //C++ part
+    _template = "$2!($1)",
     address = "ref $1",
+    NULL = " null",
+
     _struct = "",
-    _array = "$1* $2"
+    _array = "$1* $2",
+    _nullAddress = " null"
 }
 
 enum AliasCreation = "alias p$2 = $1 function";
@@ -146,7 +151,7 @@ auto getFuncs(Input, Reg)(Input file, Reg reg)
 * declaration to D, arrays are transformed to pointers, as if it becomes ref, the function
 * won't be able to accept casts
 */
-string cppFuncsToD(string funcs)
+string cppFuncsToD(string funcs, bool replaceAditional = false)
 {
     alias f = funcs;
     writeln("Converting functions to D style");
@@ -159,10 +164,21 @@ string cppFuncsToD(string funcs)
         f = f.replaceAll(CPP_TO_D.replaceOut, _out);
         f = f.replaceAll(CPP_TO_D.replaceAlign, _align);
         f = f.replaceAll(CPP_TO_D.replaceRef, _ref);
+        //C++ Part
+        f = f.replaceAll(CPP_TO_D.replaceTemplate, _template);
         f = f.replaceAll(CPP_TO_D.replaceAddress, address);
+        f = f.replaceAll(CPP_TO_D.replaceNULL, NULL);
+
         f = f.replaceAll(CPP_TO_D.replaceStruct, _struct);
         f = f.replaceAll(CPP_TO_D.replaceArray, _array);
+        f = f.replaceAll(CPP_TO_D.replaceNullAddress, _nullAddress);
         f = f.replaceAll(CPP_TO_D.removeLoneVoid, loneVoid );
+        
+        if(replaceAditional)
+        {
+            f = f.replaceAll(CPP_TO_D.replaceString, _string);
+            f = f.replaceAll(CPP_TO_D.replaceHeadConst, head_const);
+        }
     }
     return funcs;
 }
@@ -414,13 +430,12 @@ void playPlugins(string cwd)
         int retVal = p.main(cwd ~ pluginArgs);
         if(retVal == Plugin.SUCCESS)
         {
+            string processed = p.convertToD_Pipe();
             if(p.willConvertToD)
-            {
-                string processed = cppFuncsToD(p.convertToD_Pipe());
-                if(p.onReturnControl(processed) == Plugin.ERROR)
-                    goto PLUGIN_ERROR;
-                writeln("'", pluginName, "' finished tasks.\n\n\n");
-            }
+                processed= cppFuncsToD(processed, true);
+            if(p.onReturnControl(processed) == Plugin.ERROR)
+                goto PLUGIN_ERROR;
+            writeln("'", pluginName, "' finished tasks.\n\n\n");
             p.hasFinishedExecution = true;
         }
         else

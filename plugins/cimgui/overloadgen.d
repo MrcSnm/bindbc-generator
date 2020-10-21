@@ -6,6 +6,7 @@ import std.array : split;
 import std.algorithm : countUntil;
 import std.file : readText, exists;
 
+bool willDefineOverloadTemplate = false;
 
 static struct OverloadedFunction
 {
@@ -20,6 +21,7 @@ static struct Function
     string owner;
     string name;
     bool exists;
+    bool willForward;
 
     @property string fname()
     {
@@ -31,6 +33,30 @@ static struct Function
     OverloadedFunction[] overloads;
 }
 
+string[] ignoreList =
+[
+    "ImVector_ImVector",
+    "ImVector_back",
+    "ImVector_begin",
+    "ImVector_end",
+    "ImVector_erase",
+    "ImVector_find",
+    "ImVector_front",
+    "ImVector_resize"
+];
+
+bool isOnIgnoreList(string line)
+{
+    foreach(ignore;ignoreList)
+        if(line.countUntil(ignore) != -1)
+            return true;
+    return false;
+}
+
+bool hasVarArgs(string params)
+{
+    return params.countUntil("...") != -1;
+}
 
 static Function[] getFunctions(File file)
 {
@@ -55,11 +81,17 @@ static Function[] getFunctions(File file)
                     overload.returnType = func.owner;
                 else
                     overload.returnType = infos[1];
-                overload.cimguiFunc = infos[2];
+                long constInd = infos.countUntil("const");
+                int infoIndex = 2;
+                if(constInd != -1)
+                {
+                    overload.returnType~= " "~infos[constInd+1];
+                    infoIndex++;
+                }
+                overload.cimguiFunc = infos[infoIndex];
                 
-                long argsStart = line.countUntil("(");
+                // long argsStart = line.countUntil("("); //Not used anymore
                 getParameters(func, overload);
-                // overload.argsTypes = line[cast(uint)argsStart..line.length];
                 // overload.argsTypes = line[cast(uint)argsStart..line.length];
                 func.overloads~= overload;
             }
@@ -70,6 +102,11 @@ static Function[] getFunctions(File file)
                 ret~= func;
             func = Function();
             string[] infos = line.split("_"); //Gets the function name
+            if(isOnIgnoreList(line))
+            {
+                func.exists = false;
+                continue;
+            }
             int nameIndex = 0;
             if(infos.length != 1)
             {
@@ -96,6 +133,18 @@ static Function[] getFunctions(File file)
     return ret;
 }
 
+string generateAliasOverload()
+{
+return q{
+static template overload(Func...)
+{
+    import std.traits;
+    static foreach(f; Funcs)
+        auto overload(Parameters!f params){
+            return f(params);}
+}};
+}
+
 static void getParameters(ref Function func, ref OverloadedFunction overload)
 {
     JSONValue jsonFunc = defs[func.fname].array;
@@ -105,6 +154,10 @@ static void getParameters(ref Function func, ref OverloadedFunction overload)
         {
 
             overload.argsTypes = ovFunc["argsoriginal"].str;
+            if(hasVarArgs(overload.argsTypes))
+            {
+                func.willForward = true;
+            }
             overload.argsParams = "(";
             JSONValue argParams = ovFunc["argsT"];
             size_t len = argParams.array.length;
@@ -130,7 +183,24 @@ static string generateOverloads(Function[] funcs)
     foreach(func; funcs)
     {
         funcName = func.name;
-        foreach(overload; func.overloads)
+        if(func.willForward)
+        {
+            if(!willDefineOverloadTemplate)
+                willDefineOverloadTemplate = true;
+            line = "alias "~funcName ~"= overload!(";
+            string comment = "/**\n";
+            foreach(i, ov ; func.overloads)
+            {
+                comment~= "*\t"~ov.returnType~" "~funcName~ov.argsTypes~"\n";
+                line~= ov.cimguiFunc;
+                if(i != func.overloads.length - 1)
+                    line~=",";
+                //Write a comment on the alias for appearing 
+            }
+            comment~="*/\n";
+            fileContent~= comment~line~");\n";
+        }
+        else foreach(overload; func.overloads)
         {
             line = overload.returnType~" "~funcName~overload.argsTypes~"{"~overload.cimguiFunc;
             line~= overload.argsParams~";}";
@@ -194,6 +264,10 @@ class CimGuiOverloadPlugin : Plugin
         import std.file : write;
         string s = "module bindbc.cimgui.overloads;\n\n";
         s~= "import bindbc.cimgui.funcs;\n";
+        if(willDefineOverloadTemplate)
+            s~= generateAliasOverload();
+        s~="\n";
+        
 
         write("overloads.d", s~processedStr);
         return Plugin.SUCCESS;
