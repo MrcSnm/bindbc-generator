@@ -162,10 +162,14 @@ class CimGuiOverloadPlugin : Plugin
     {
         return storedStr;
     }
+    string outputPath;
     override int main(string[] args)
     {
+        
         if(args.length < 2)
             return returnError("Argument Expected:\nNo path for cimgui provided!");
+        else if(args.length == 3)
+            outputPath = args[2];
         string cimguiPath = args[1];
         if(!exists(cimguiPath))
             return returnError("Cimgui directory '"~cimguiPath~"' not found");
@@ -177,8 +181,7 @@ class CimGuiOverloadPlugin : Plugin
         if(!exists(defsPath))
             return returnError("Definitions path '"~defsPath~"' does not exists");
         
-        writeln("Hello!");
-        defs = parseJSON(readText(args[2]));
+        defs = parseJSON(readText(defsPath));
 
         File f = File(overloads);
         Function[] funcs = getFunctions(f);
@@ -186,16 +189,22 @@ class CimGuiOverloadPlugin : Plugin
 
         return Plugin.SUCCESS;
     }
-    override void onReturnControl(string processedStr)
+    override int onReturnControl(string processedStr)
     {
-        writeln(processedStr);
+        import std.file : write;
+        string s = "module bindbc.cimgui.overloads;\n\n";
+        s~= "import bindbc.cimgui.funcs;\n";
+
+        write("overloads.d", s~processedStr);
+        return Plugin.SUCCESS;
     }
     override string getHelpInformation()
     {
         return r"This plugin was made to be used in conjunction with BindBC-Generator, located on
 https://github.com/MrcSnm/bindbc-generator
 
-The argument must be 'cimgui' path, it will look for definitions.json and overloads.txt ";
+1: Argument must be 'cimgui' path, it will look for definitions.json and overloads.txt 
+2(Optional): Output path";
     }
 
 }

@@ -30,6 +30,7 @@ enum D_TO_REPLACE
     _out = " out_",
     _align = " align_",
     _ref = " ref_",
+    address = "ref $1",
     _struct = "",
     _array = "$1* $2"
 }
@@ -158,6 +159,7 @@ string cppFuncsToD(string funcs)
         f = f.replaceAll(CPP_TO_D.replaceOut, _out);
         f = f.replaceAll(CPP_TO_D.replaceAlign, _align);
         f = f.replaceAll(CPP_TO_D.replaceRef, _ref);
+        f = f.replaceAll(CPP_TO_D.replaceAddress, address);
         f = f.replaceAll(CPP_TO_D.replaceStruct, _struct);
         f = f.replaceAll(CPP_TO_D.replaceArray, _array);
         f = f.replaceAll(CPP_TO_D.removeLoneVoid, loneVoid );
@@ -415,14 +417,15 @@ void playPlugins(string cwd)
             if(p.willConvertToD)
             {
                 string processed = cppFuncsToD(p.convertToD_Pipe());
-                p.onReturnControl(processed);
+                if(p.onReturnControl(processed) == Plugin.ERROR)
+                    goto PLUGIN_ERROR;
                 writeln("'", pluginName, "' finished tasks.\n\n\n");
             }
             p.hasFinishedExecution = true;
         }
         else
         {
-            writeln("Error ocurred while executing '", pluginName, "'!\n\t->", p.error);
+            PLUGIN_ERROR: writeln("Error ocurred while executing '", pluginName, "'!\n\t->", p.error);
         }
     }
 }
@@ -684,7 +687,6 @@ int main(string[] args)
         if(!optNoTypes)
             remove(optFile.stripExtension ~ ".d");
     }
-    writeln(args[0]);
     playPlugins(args[0]);
     
     return Plugin.SUCCESS;

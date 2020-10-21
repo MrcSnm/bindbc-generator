@@ -53,7 +53,7 @@ abstract class Plugin
     /**
     *   Executed after generate processing
     */
-    abstract void onReturnControl(string processedStr);
+    abstract int onReturnControl(string processedStr);
 
     /**
     *   Provides help information when every dll is loaded but no argument was passed

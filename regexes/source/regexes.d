@@ -21,6 +21,7 @@ enum CPP_TO_D
     replaceOut = ctRegex!(r"\sout\b"),
     replaceAlign = ctRegex!(r"align\b"),
     replaceRef = ctRegex!(r"\sref\b"),
+    replaceAddress = ctRegex!(r"(\w+?)&"),
     replaceStruct = ctRegex!(r"\bstruct\b"),
     replaceArray = ctRegex!(r"((?:const\s)?\w+?\*?\s+?)(\w+?)\[([\w\d]*)\]"),
     removeLoneVoid = ctRegex!(r"\(void\)"),
