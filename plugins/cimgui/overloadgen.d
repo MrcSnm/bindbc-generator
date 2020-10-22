@@ -118,6 +118,8 @@ static Function[] getFunctions(File file)
                 if(separatorIndex == -1)
                     return null;
                 func.name = infos[nameIndex][0..cast(uint)separatorIndex];
+                if(func.name == func.owner)
+                    func.name = "new"~func.name;
             }
             else
             {
