@@ -50,9 +50,13 @@ Plugin exportMyplugin(){return new MyPlugin();}
 ```
 
 Now, when executing the program, you will need to pass some argument like:
-```
+`bindbc-generate -l="myplugin" -a myplugin-behavior="[arg1 arg2 arg3]"`
 
-```
+-l lets you choose which plugin to load, you can pass `--load-all` for loading every plugin in the plugins folder.
+-a Will let you pass arguments for your plugin execution, they are separated by space, remember that you will need to pass the target instead of the plugin name.
+**WARNING** 
+    If no arg is passed, the plugin execution is skipped.
+
 
 ## Options
 ```
