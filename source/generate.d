@@ -30,6 +30,7 @@ enum D_TO_REPLACE
     _out = " out_",
     _align = " align_",
     _ref = " ref_",
+    _sizeof = "$1.sizeof",
     //C++ part
     _template = "$2!($1)",
     address = "ref $1",
@@ -164,6 +165,7 @@ string cppFuncsToD(string funcs, bool replaceAditional = false)
         f = f.replaceAll(CPP_TO_D.replaceOut, _out);
         f = f.replaceAll(CPP_TO_D.replaceAlign, _align);
         f = f.replaceAll(CPP_TO_D.replaceRef, _ref);
+        f = f.replaceAll(CPP_TO_D.replaceSizeof, _sizeof);
         //C++ Part
         f = f.replaceAll(CPP_TO_D.replaceTemplate, _template);
         f = f.replaceAll(CPP_TO_D.replaceAddress, address);

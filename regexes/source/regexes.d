@@ -21,6 +21,7 @@ enum CPP_TO_D
     replaceOut = ctRegex!(r"\sout\b"),
     replaceAlign = ctRegex!(r"align\b"),
     replaceRef = ctRegex!(r"\sref\b"),
+    replaceSizeof = ctRegex!(r"sizeof\(([\w*]+)\)"),
     //C++ part
     replaceTemplate = ctRegex!(r"(\w+?)<(\w+)>"),
     replaceAddress = ctRegex!(r"([\w<>\(\)!]+?)\s*&"),
