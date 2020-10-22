@@ -271,7 +271,7 @@ class CimGuiOverloadPlugin : Plugin
         
         if(outputPath)
         {
-            if(outputPath[$-1] == "/")
+            if(outputPath[$-1] == '/')
                 outputPath = outputPath[0..$-1];
             write(outputPath~"/overloads.d", s~processedStr);
         }
