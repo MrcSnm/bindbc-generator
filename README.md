@@ -49,6 +49,11 @@ class MyPlugin : Plugin
 Plugin exportMyplugin(){return new MyPlugin();}
 ```
 
+Now, when executing the program, you will need to pass some argument like:
+```
+
+```
+
 ## Options
 ```
 Bindbc-generator options.
