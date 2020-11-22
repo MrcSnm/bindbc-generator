@@ -109,7 +109,7 @@ bool executeDpp(File file, string _dppArgs)
         string noExt = stripExtension(file.name);
         string genName = noExt~".d";
         string fileContent = "module bindbc."~ noExt~".types;\n" ~readText(genName);
-        mkdirRecurse("bindbc/cimgui");
+        mkdirRecurse("bindbc/"~noExt);
         std.file.write("bindbc/"~noExt~"/types.d", fileContent);
     }
     else
