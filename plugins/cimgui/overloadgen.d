@@ -10,6 +10,7 @@ bool willDefineOverloadTemplate = false;
 
 static struct OverloadedFunction
 {
+    string pOutType;
     string returnType;
     string argsTypes;
     string argsParams;
@@ -18,7 +19,7 @@ static struct OverloadedFunction
 
 static struct Function
 {
-    string owner;
+    string owner; 
     string name;
     bool exists;
     bool willForward;
@@ -35,6 +36,7 @@ static struct Function
 
 string[] ignoreList =
 [
+    "ImPool_Remove",
     "ImVector_ImVector",
     "ImVector_back",
     "ImVector_begin",
@@ -44,6 +46,7 @@ string[] ignoreList =
     "ImVector_front",
     "ImVector_resize"
 ];
+
 
 bool isOnIgnoreList(string line)
 {
@@ -78,7 +81,7 @@ static Function[] getFunctions(File file)
             {
                 OverloadedFunction overload;
                 if(infos[1] == "nil")
-                    overload.returnType = func.owner;
+                    overload.returnType = func.owner~"*";
                 else
                     overload.returnType = infos[1];
                 long constInd = infos.countUntil("const");
@@ -136,14 +139,16 @@ static Function[] getFunctions(File file)
 string generateAliasOverload()
 {
 return q{
-static template overload(Func...)
+import core.stdc.stdarg;
+static template overload(Funcs...)
 {
-    import std.traits;
+    import std.traits : Parameters;
     static foreach(f; Funcs)
         auto overload(Parameters!f params){
             return f(params);}
 }};
 }
+
 
 static void getParameters(ref Function func, ref OverloadedFunction overload)
 {
@@ -153,19 +158,50 @@ static void getParameters(ref Function func, ref OverloadedFunction overload)
         if(ovFunc["ov_cimguiname"].str == overload.cimguiFunc)
         {
 
-            overload.argsTypes = ovFunc["argsoriginal"].str;
-            if(hasVarArgs(overload.argsTypes))
-            {
-                func.willForward = true;
-            }
+            //Check for callback to preppend extern(C)
+            string argsTypes = "";
+            long ind = 0; 
+            long nextInd = 0;
+            import std.string:indexOf;
+
+            overload.argsTypes = ovFunc["args"].str;
+
+            func.willForward = hasVarArgs(overload.argsTypes);
+            
             overload.argsParams = "(";
             JSONValue argParams = ovFunc["argsT"];
             size_t len = argParams.array.length;
             foreach(i, params; argParams.array)
             {
                 overload.argsParams~= params["name"].str;
+                if(const(JSONValue)* ret = "ret" in params) //Is a callback
+                {
+                    // argsTypes~= "extern(C) ";
+                    //Move current string index pointer 2 times to ) (as the callback must have at )
+                    //I'll not deal with callback that receives a callback as it is too complex and unnecessary 
+                    nextInd = indexOf(overload.argsTypes, ')', nextInd)+1;
+                    nextInd = indexOf(overload.argsTypes, ')', nextInd)+1;
+                }
+                long nextIndTemp = indexOf(overload.argsTypes, ",", nextInd);
+                if(nextIndTemp == -1)
+                    nextIndTemp = indexOf(overload.argsTypes, ")", nextInd);
+                nextInd = nextIndTemp+1;
+
+                if(params["name"].str == "pOut") //For returning it later
+                {
+                    overload.pOutType = params["type"].str;
+                }
+                else
+                    argsTypes~= overload.argsTypes[ind..nextInd];
+                ind = nextInd;
                 if(i+1 != len)
                     overload.argsParams~=",";
+            }
+            if(argsTypes != "")
+            {
+                overload.argsTypes = argsTypes;
+                if(overload.argsTypes[0] != '(')
+                    overload.argsTypes = "("~overload.argsTypes;
             }
             overload.argsParams~= ")";
             break;
@@ -205,8 +241,24 @@ static string generateOverloads(Function[] funcs)
         }
         else foreach(overload; func.overloads)
         {
-            line = overload.returnType~" "~funcName~overload.argsTypes~"{"~overload.cimguiFunc;
-            line~= overload.argsParams~";}";
+            line = overload.returnType~" "~funcName~overload.argsTypes~"{";
+            if(overload.returnType != "void")
+            {
+                if(overload.pOutType == "")
+                    line~= "return ";
+                else //Create pOut ret
+                {
+                    long asteriskIndex = countUntil(overload.pOutType, "*");
+                    line~= overload.pOutType[0..asteriskIndex] ~ " pOut;\t";
+                }
+            }
+            line~=overload.cimguiFunc;
+            line~= overload.argsParams;
+            if(overload.pOutType != "")
+            {
+                line~=";\t return pOut";
+            }
+            line~=";}";
             fileContent~= line~"\n";
         }
     }
@@ -226,6 +278,24 @@ string getDefinitionsPath(string cimguiPath)
     return cimguiPath~"/generator/output/definitions.json";
 }
 
+
+string injectRefOnPOut(string fileContent)
+{
+    string tempFileContent = fileContent;
+    string newFileContent;
+    long pOutIndex = countUntil(fileContent, "pOut,");
+    static long len = "pOut,".length;
+    while(pOutIndex != -1)
+    {
+        tempFileContent = tempFileContent[0..pOutIndex];
+        newFileContent~=tempFileContent~"&pOut,";
+        fileContent = fileContent[pOutIndex+len..$];
+        tempFileContent = fileContent;
+        pOutIndex = countUntil(tempFileContent, "pOut,");
+    }
+
+    return newFileContent~fileContent;
+}
 
 class CimGuiOverloadPlugin : Plugin
 {
@@ -271,7 +341,10 @@ class CimGuiOverloadPlugin : Plugin
         if(willDefineOverloadTemplate)
             s~= generateAliasOverload();
         s~="\n";
+
+        //Search for pOuts on processedStr for putting & 
         
+        processedStr = injectRefOnPOut(processedStr);
         if(outputPath)
         {
             if(outputPath[$-1] == '/')
