@@ -23,14 +23,21 @@ enum CPP_TO_D
     replaceRef = ctRegex!(r"\sref\b"),
     replaceSizeof = ctRegex!(r"sizeof\(([\w*]+)\)"),
     //C++ part
-    replaceTemplate = ctRegex!(r"(\w+?)<(\w+)>"),
+    replaceTemplate = ctRegex!(r"(\w+?)<([\w,\s\(\)]+)>"),
+    //Can match for instance:
+    //string& something = "test"
+    //MyClass<T> t = MyClass<T>(args)
+    replaceAddressDefault = ctRegex!(`([\w<>!]+?)\s*&\s*(\w+)\s*=\s*(?:(?:\"|\')\w+(?:\"|\')|([\w<>]+\s*\(?[\w,'"]*\)?))`),
     replaceAddress = ctRegex!(r"([\w<>\(\)!]+?)\s*&"),
     replaceNULL = ctRegex!(r"\sNULL\b"),
+
     replaceStruct = ctRegex!(r"\bstruct\b"),
     replaceArray = ctRegex!(r"((?:const\s)?\w+?\*?\s+?)(\w+?)\[([\w\d]*)\]"),
     replaceNullAddress = ctRegex!(r"\(\(void\*\)0\)"),
     removeLoneVoid = ctRegex!(r"\(void\)"),
-    replaceString = ctRegex!(r"const char\*")
+    replaceString = ctRegex!(r"const char\*"),
+    
+    hasDefaultArg = ctRegex!(r"\s*=\s*")
 }
 
 

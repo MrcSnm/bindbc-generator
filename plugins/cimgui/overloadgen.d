@@ -338,6 +338,7 @@ class CimGuiOverloadPlugin : Plugin
         string s = "module bindbc.cimgui.overloads;\n\n";
         s~= "import bindbc.cimgui.funcs;\n";
         s~= "import bindbc.cimgui.types;\n";
+        s~= "extern(C): \n";
         if(willDefineOverloadTemplate)
             s~= generateAliasOverload();
         s~="\n";

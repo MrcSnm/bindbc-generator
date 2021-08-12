@@ -33,6 +33,9 @@ enum D_TO_REPLACE
     _sizeof = "$1.sizeof",
     //C++ part
     _template = "$2!($1)",
+
+    addressDefault = "$1 $2 = $3", //Ignores ref for the first def
+    addressAllRef = "ref $1 $2", //Ignores ref for the first def
     address = "ref $1",
     NULL = " null",
 
@@ -158,13 +161,15 @@ string cppFuncsToD(string funcs, bool replaceAditional = false)
     writeln("Converting functions to D style");
     with(D_TO_REPLACE)
     {
+        f = f.replaceAll(CPP_TO_D.replaceRef, _ref);
+        replaceRefWithDefault(funcs);
         f = f.replaceAll(CPP_TO_D.replaceUint, unsigned_int);
         f = f.replaceAll(CPP_TO_D.replaceUByte, unsigned_char);
         f = f.replaceAll(CPP_TO_D.replaceCallback, _callback);
         f = f.replaceAll(CPP_TO_D.replaceIn, _in);
         f = f.replaceAll(CPP_TO_D.replaceOut, _out);
         f = f.replaceAll(CPP_TO_D.replaceAlign, _align);
-        f = f.replaceAll(CPP_TO_D.replaceRef, _ref);
+
         f = f.replaceAll(CPP_TO_D.replaceSizeof, _sizeof);
         //C++ Part
         f = f.replaceAll(CPP_TO_D.replaceTemplate, _template);
@@ -183,6 +188,35 @@ string cppFuncsToD(string funcs, bool replaceAditional = false)
         }
     }
     return funcs;
+}
+
+import std.regex:Captures, RegexMatch;
+string[] capturesToArray(RegexMatch!string matches)
+{
+    string[] ret;
+    foreach(m; matches.array)
+        ret~= m.hit;
+    return ret;
+}
+
+/**
+*   Creates overload for ref functions with defaults
+*/
+void replaceRefWithDefault(ref string funcs)
+{
+    foreach(ref line; funcs.splitLines)
+    {
+        auto matches = line.matchAll(CPP_TO_D.replaceAddressDefault);
+        if(matches)
+        {   
+            //Generate ref and non ref default
+            string toAppend = line.replaceAll(CPP_TO_D.replaceAddressDefault, D_TO_REPLACE.addressDefault);
+            import std.regex : matchFirst;
+            if(!line.matchFirst(CPP_TO_D.hasDefaultArg))
+                toAppend~= "\n" ~line.replaceAll(CPP_TO_D.replaceAddressDefault, D_TO_REPLACE.addressAllRef);
+            funcs = funcs.replaceFirst(line, toAppend);
+        }
+    }
 }
 
 auto cleanPreFuncsDeclaration(Strs, Reg)(Strs funcs, Reg reg)
