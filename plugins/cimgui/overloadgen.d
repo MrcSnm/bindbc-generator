@@ -1,10 +1,12 @@
 module overloadgen;
 import plugin;
+import std.path;
+import std.process : executeShell;
 import std.stdio;
 import std.json;
-import std.array : split;
+import std.array : split, array;
+import std.file;
 import std.algorithm : countUntil;
-import std.file : readText, exists;
 
 bool willDefineOverloadTemplate = false;
 
@@ -308,19 +310,39 @@ class CimGuiOverloadPlugin : Plugin
     string outputPath;
     override int main(string[] args)
     {
-        
         if(args.length < 2)
-            return returnError("Argument Expected:\nNo path for cimgui provided!");
+            return returnError("Argument Expected:\nNo path for cimgui folder provided!");
         else if(args.length == 3)
             outputPath = args[2];
         string cimguiPath = args[1];
+        import std.path;
+        
         if(!exists(cimguiPath))
-            return returnError("Cimgui directory '"~cimguiPath~"' not found");
+        {
+            string temp = (getcwd()~"/"~cimguiPath~"/").asNormalizedPath.array;
+            writeln("Checking if ", temp, " exists");
+            if(exists(temp))
+            {
+                cimguiPath = temp;
+            }
+            else
+                return returnError("Cimgui directory '"~cimguiPath~"' not found");
+        }
         string overloads = getOverloadsPath(cimguiPath);
         string defsPath = getDefinitionsPath(cimguiPath);
 
         if(!exists(overloads))
-            return returnError("Overloads path '"~overloads~"' does not exists");
+        {
+            writeln("Overloads does not exists yet. Overloadgen will try to generate the overload");
+            string toTest = (overloads~"../../").asNormalizedPath.array;
+            if(exists((toTest~"/generator.bat").asNormalizedPath.array))
+            {
+                version(Windows){executeShell(readText(toTest~"\\generator.bat"));}
+                else{executeShell(readText(toTest~"\\generator.sh"));}
+            }
+            else
+                return returnError("Overloads path '"~overloads~"' does not exists");
+        }
         if(!exists(defsPath))
             return returnError("Definitions path '"~defsPath~"' does not exists");
         
@@ -338,7 +360,6 @@ class CimGuiOverloadPlugin : Plugin
         string s = "module bindbc.cimgui.overloads;\n\n";
         s~= "import bindbc.cimgui.funcs;\n";
         s~= "import bindbc.cimgui.types;\n";
-        s~= "extern(C): \n";
         if(willDefineOverloadTemplate)
             s~= generateAliasOverload();
         s~="\n";

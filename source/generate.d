@@ -447,11 +447,19 @@ void pluginArgsHandler(string opt, string value)
     if(opt == "plugin-args|a")
     {
         if(value.countUntil("=") == -1)
-            return writeln("plugin-args wrong formatting!");
+            return writeln("plugin-args wrong formatting! It must be --plugin-args pluginname=\"[arg1 arg2]\" or -a pluginname=\"[arg1 arg2]\"");
         string[] v = value.split("=");
         string pluginName = v[0];
-        if(v[1].countUntil("[") != -1 && v[1].countUntil("]") == v[1].length - 1)
-            optPluginArgs[pluginName]~= v[1][1..$-1].split(" ");
+        if(v[1][0] == '[')
+        {
+            if(v[1][$-1] != ']')
+            {
+                writeln("Plugin argument error! If the plugins argument list starts with '[', it MUST end with ']'. Argument sent: ", value);
+                return;
+            }
+            else
+                optPluginArgs[pluginName]~= v[1][1..$-1].split(" ");
+        }
         else
             optPluginArgs[pluginName]~= v[1];
     }
@@ -461,7 +469,14 @@ void playPlugins(string cwd)
 {
     foreach(pluginName, pluginArgs; optPluginArgs)
     {
-        Plugin p = PluginAdapter.loadedPlugins[pluginName];
+        Plugin* p = (pluginName in PluginAdapter.loadedPlugins);
+        if(p is null)
+        {
+            writeln("Plugin named '"~pluginName~"' does not exists!\nAvailable plugins list:");
+            foreach(k, v; PluginAdapter.loadedPlugins)
+                writeln("- ", k);
+            return;
+        }
         writeln("'", pluginName, "' under execution with arguments ", cwd~pluginArgs, "\n\n\n");
         int retVal = p.main(cwd ~ pluginArgs);
         if(retVal == Plugin.SUCCESS)
@@ -570,7 +585,7 @@ to pass only the current working dir.
 Example on multiple args-> -a myplugin=[arg1 arg2 arg3]
 
 Reserved arguments are:
-    d-conv -> Converts from C to D
+    d-conv -> Converts from C to D, every plugin that receives that argument will have its string from convertToD_Pipe() converted to D style
 ";
     //Recompile
     helpInfo.options[9].help = r"
