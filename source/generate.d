@@ -7,15 +7,174 @@
 module generate;
 import regexes;
 import std.file;
-import std.process:executeShell;
+import std.process : executeShell;
 import std.array;
 import std.string;
 import std.getopt;
 import std.regex : replaceAll, matchAll, regex, Regex;
-import std.path:baseName, stripExtension;
-import std.stdio:writeln, File;
+import std.path : baseName, stripExtension;
+import std.stdio : writeln, File;
 import pluginadapter;
 import plugin;
+
+
+string dppPath;
+string pluginsPath;
+string optFile;
+string optDppArgs;
+string optPresets;
+bool optNoTypes;
+bool optLoad;
+string optCustom;
+bool optFuncPrefix;
+string[] optUsingPlugins = [];
+bool optLoadAll;
+string[][string] optPluginArgs;
+bool optRecompile;
+bool optDebug;
+
+void helpInfoSetup(ref GetoptResult helpInfo)
+{
+    size_t i = 0;
+    // Dpp path
+    helpInfo.options[i++].help = "Path to dpp executable";
+    // Plugins path
+    helpInfo.options[i++].help = "Path to plugins folder";
+    //Dpparg
+    helpInfo.options[i++].help = "Arguments to be passed to dpp, --preprocess-only is always included. Pass multiple arguments via comma";
+    //File
+    helpInfo.options[i++].help = "Target header to get functions and types for generation";
+    //Presets
+    helpInfo.options[i++].help = r"
+(Presets and custom are mutually exclusive)
+Function getter presets:
+   cimgui - Preset used for compiling libcimgui -> https://github.com/cimgui/cimgui
+";
+    helpInfo.options[i++].help = "Don't execute Dpp, and don't generate the types file";
+    //Custom
+    helpInfo.options[i++].help =r"
+Flags m and g are always added, $1 must always match function without exports.
+Examples: 
+    void func(char* str);
+    int main();
+";
+    //Prefix-only
+    helpInfo.options[i++].help = r"
+This will be the prefix of your regex.
+The postfix will be a predefined one for function format:
+    Appends ^(?: at the start(The one which is meant to be ignored)
+    Appends )(.+\);)$ at the end (Finish the ignored one and append the function $1 one)
+";
+    //Plugin-load
+    helpInfo.options[i++].help = r"
+Loads plugins located in the plugins folder. For the plugin being loaded it must:
+    1: Export a function named export(Modulename) which returns a Plugin instance.
+    2: Have a compiled .dll or .so following the scheme 'libpluginPLUGIN_FOLDER_NAME'
+        2.1: If you need many exports in a single dll, create a package.d with public imports and
+        compile it, plugin finding is first folder only, i.e: not recursive.
+";
+    //Load all
+    helpInfo.options[i++].help = r"
+Loads every plugin located in the plugins folder";
+    //Plugins args
+    helpInfo.options[i++].help = r"
+Arguments to pass to a plugin's entry point.
+Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
+to pass only the current working dir.
+
+Example on multiple args -> --plugin-args myplugin=[arg1 arg2 arg3]
+
+Reserved arguments are:
+    d-conv -> Converts from C to D; every plugin that receives that argument will have its string from convertToD_Pipe() converted to D style
+";
+    //Recompile
+    helpInfo.options[i++].help = r"
+Using this option will force a recompilation of the plugins!";
+    //Debug
+    helpInfo.options[i++].help = r"
+Compile dynamic libraries with debug symbols enabled";
+}
+
+int main(string[] args)
+{
+    GetoptResult helpInfo;
+    try
+    {
+        helpInfo = getopt(
+            args,
+            "dpp-path", &dppPath,
+            "plugins-path", &pluginsPath,
+            "dpparg|d", &optDppArgs,
+            "file|f", &optFile,
+            "presets|p", &optPresets,
+            "notypes|n", &optNoTypes,
+            "custom|c", &optCustom,
+            "use-func-prefix|u", &optFuncPrefix,
+            "load-plugins|l", &optUsingPlugins,
+            "load-all", &optLoadAll,
+            "plugin-args|a", &pluginArgsHandler,
+            "recompile|r", &optRecompile,
+            "debug", &optDebug
+        );
+    }
+    catch(Exception e)
+    {
+        writeln(e.msg);
+        return Plugin.ERROR;
+    }
+    if (pluginsPath is null) 
+        pluginsPath = "plugins";
+    helpInfoSetup(helpInfo);
+    //I don't really understand what type is regex...
+    Regex!char targetReg;
+
+    if(!checkPluginLoad())
+        return Plugin.ERROR;
+    getDConvPlugins();
+
+    bool pluginOnly = checkPluginOnly();
+
+    if(!pluginOnly)
+    {
+        checkPresets(targetReg);
+        checkCustomRegex(targetReg);
+    }
+
+    if(checkHelpNeeded(helpInfo))
+        return 1;
+    
+    if(!pluginOnly)
+    {
+        if(!checkDppExecution())
+            return Plugin.ERROR;
+        if(optPresets == "" && optCustom == "")
+        {
+            writeln("ERROR:\nNo regex nor presets for getting functions specified\n");
+            return Plugin.ERROR;
+        }
+        string funcs = getFuncs(optFile, targetReg);
+        if(funcs == "")
+        {
+            writeln("ERROR:\nNo hit was made by your function");
+            return Plugin.ERROR;
+        }
+        string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
+        string dfuncs = cppFuncsToD(cleanFuncs);
+        string[] darrFuncs = dfuncs.split("\n");
+
+        //It will already remove darrFuncs params
+        string libName = stripExtension(optFile);
+        createFuncsFile(libName, darrFuncs);
+        createLibLoad(libName, darrFuncs);    
+        createPackage(libName);
+
+        if(!optNoTypes)
+            remove(optFile.stripExtension ~ ".d");
+    }
+    playPlugins(args[0]);
+    
+    return Plugin.SUCCESS;
+} 
 
 
 enum D_TO_REPLACE
@@ -80,26 +239,40 @@ File createDppFile(string file)
 
 bool executeDpp(File file, string _dppArgs)
 {
-    string[4] tests = ["d++", "d++.exe", "dpp", "dpp.exe"];
     string selected;
-    foreach(t; tests)
+
+    if(dppPath !is null)
     {
-        if(exists(t))
+        if(exists(dppPath))
+            selected = dppPath;
+        else
         {
-            selected = t;
-            break;
+            writeln("Could not create types.d\nReason: dpp not by the specified path");
+            return false;
         }
     }
-    if(selected == "")
+    else
     {
-        writeln("Could not create types.d\nReason: d++/dpp is not on the current folder");
-        return false;
+        string[4] tests = ["d++", "d++.exe", "dpp", "dpp.exe"];
+        foreach(t; tests)
+        {
+            if(exists(t))
+            {
+                selected = t;
+                break;
+            }
+        }
+        if(selected == "")
+        {
+            writeln("Could not create types.d\nReason: d++/dpp is not on the current folder");
+            return false;
+        }
     }
 
     string[] dppArgs = [selected, "--preprocess-only"];
     if(_dppArgs != "")
-        dppArgs~= _dppArgs.split(",");
-    dppArgs~=file.name;
+        dppArgs ~= _dppArgs.split(",");
+    dppArgs ~= file.name;
 
     auto ret = executeShell(dppArgs.join(" "));
     
@@ -402,18 +575,6 @@ public import bindbc.$.types;
 
 enum ERROR = -1;
 
-string optFile;
-string optDppArgs;
-string optPresets;
-bool optNoTypes;
-bool optLoad;
-string optCustom;
-bool optFuncPrefix;
-string[] optUsingPlugins = [];
-bool optLoadAll;
-string[][string] optPluginArgs;
-bool optRecompile;
-bool optDebug;
 
 
 enum ReservedArgs : string
@@ -483,7 +644,7 @@ void playPlugins(string cwd)
         {
             string processed = p.convertToD_Pipe();
             if(p.willConvertToD)
-                processed= cppFuncsToD(processed, true);
+                processed = cppFuncsToD(processed, true);
             if(p.onReturnControl(processed) == Plugin.ERROR)
                 goto PLUGIN_ERROR;
             writeln("'", pluginName, "' finished tasks.\n\n\n");
@@ -538,62 +699,6 @@ Just create an issue or a pull request on https://www.github.com/MrcSnm/bindbc-g
     }
 }
 
-void helpInfoSetup(ref GetoptResult helpInfo)
-{
-    //Dpparg
-    helpInfo.options[0].help = "Arguments to be appended to dpp, --preprocess-only is always included. Pass multiple arguments via comma";
-    //File
-    helpInfo.options[1].help = "Target header to get functions and types for generation";
-    //Presets
-    helpInfo.options[2].help = r"
-(Presets and custom are mutually exclusive)
-Function getter presets:
-   cimgui - Preset used for compiling libcimgui -> https://github.com/cimgui/cimgui
-";
-    helpInfo.options[3].help = "Don't execute Dpp, and don't generate the types file";
-    //Custom
-    helpInfo.options[4].help =r"
-Flags m and g are always added, $1 must always match function without exports.
-Examples: 
-    void func(char* str);
-    int main();
-";
-    //Prefix-only
-    helpInfo.options[5].help = r"
-This will be the prefix of your regex.
-The postfix will be a predefined one for function format:
-    Appends ^(?: at the start(The one which is meant to be ignored)
-    Appends )(.+\);)$ at the end (Finish the ignored one and append the function $1 one)
-";
-    //Plugin-load
-    helpInfo.options[6].help = r"
-Loads plugins located at the plugins folder. For the plugin being loaded it must:
-    1: Export a function named export(Modulename) which returns a Plugin instance.
-    2: Have a compiled .dll or .so following the scheme 'libpluginPLUGIN_FOLDER_NAME'
-        2.1: If you need many exports in a single dll, create a package.d with public imports and
-        compile it, plugin finding is first folder only, i.e: not recursive.
-";
-    //Load all
-    helpInfo.options[7].help = r"
-Loads every plugin located at the plugis folder";
-    //Plugins args
-    helpInfo.options[8].help = r"
-Plugins arguments to pass into the entrance point.
-Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
-to pass only the current working dir.
-
-Example on multiple args-> -a myplugin=[arg1 arg2 arg3]
-
-Reserved arguments are:
-    d-conv -> Converts from C to D, every plugin that receives that argument will have its string from convertToD_Pipe() converted to D style
-";
-    //Recompile
-    helpInfo.options[9].help = r"
-Using this option will force a recompilation of the plugins!";
-    //Debug
-    helpInfo.options[10].help = r"
-Compile dynamic libraries with debug symbols enabled";
-}
 
 bool checkHelpNeeded(ref GetoptResult helpInfo)
 {
@@ -618,9 +723,9 @@ bool checkPluginLoad()
     if(optUsingPlugins.length != 0 || optLoadAll)
     {
         if(optLoadAll)
-            optUsingPlugins = PluginAdapter.loadPlugins(optUsingPlugins, optRecompile, optDebug);
+            optUsingPlugins = PluginAdapter.loadPlugins(pluginsPath, optUsingPlugins, optRecompile, optDebug);
         else
-            PluginAdapter.loadPlugins(optUsingPlugins, optRecompile, optDebug);
+            PluginAdapter.loadPlugins(pluginsPath, optUsingPlugins, optRecompile, optDebug);
         int nullCount = 0;
         if(optUsingPlugins.length == 0)
         {
@@ -670,7 +775,7 @@ D style
         File f = createDppFile(_f);
         if(f.name == "")
             return false;
-        executeDpp(f, optDppArgs);
+        return executeDpp(f, optDppArgs);
     }
     return true;
 }
@@ -681,79 +786,3 @@ bool checkPluginOnly()
     (optUsingPlugins.length != 0 || optLoadAll));
 }
 
-int main(string[] args)
-{
-    GetoptResult helpInfo;
-    try
-    {
-        helpInfo = getopt(
-            args,
-            "dpparg|d", &optDppArgs,
-            "file|f", &optFile,
-            "presets|p", &optPresets,
-            "notypes|n", &optNoTypes,
-            "custom|c", &optCustom,
-            "use-func-prefix|u", &optFuncPrefix,
-            "load-plugins|l", &optUsingPlugins,
-            "load-all", &optLoadAll,
-            "plugin-args|a", &pluginArgsHandler,
-            "recompile|r", &optRecompile,
-            "debug", &optDebug
-        );
-    }
-    catch(Exception e)
-    {
-        writeln(e.msg);
-        return Plugin.ERROR;
-    }
-    helpInfoSetup(helpInfo);
-    //I don't really understand what type is regex...
-    Regex!char targetReg;
-
-    if(!checkPluginLoad())
-        return Plugin.ERROR;
-    getDConvPlugins();
-
-    bool pluginOnly = checkPluginOnly();
-
-    if(!pluginOnly)
-    {
-        checkPresets(targetReg);
-        checkCustomRegex(targetReg);
-    }
-
-    if(checkHelpNeeded(helpInfo))
-        return 1;
-    
-    if(!pluginOnly)
-    {
-        if(!checkDppExecution())
-            return Plugin.ERROR;
-        if(optPresets == "" && optCustom == "")
-        {
-            writeln("ERROR:\nNo regex nor presets for getting functions specified\n");
-            return Plugin.ERROR;
-        }
-        string funcs = getFuncs(optFile, targetReg);
-        if(funcs == "")
-        {
-            writeln("ERROR:\nNo hit was made by your function");
-            return Plugin.ERROR;
-        }
-        string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
-        string dfuncs = cppFuncsToD(cleanFuncs);
-        string[] darrFuncs = dfuncs.split("\n");
-
-        //It will already remove darrFuncs params
-        string libName = stripExtension(optFile);
-        createFuncsFile(libName, darrFuncs);
-        createLibLoad(libName, darrFuncs);    
-        createPackage(libName);
-
-        if(!optNoTypes)
-            remove(optFile.stripExtension ~ ".d");
-    }
-    playPlugins(args[0]);
-    
-    return Plugin.SUCCESS;
-} 

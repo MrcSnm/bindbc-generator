@@ -7,13 +7,13 @@ module plugin;
 */
 abstract class Plugin
 {
-    private import std.stdio:writeln;
+    private import std.stdio : writeln;
     /**
-    *   If it returned from main, the plugin should be processed
+    *   If returned from main, the plugin should be processed
     */
     static int SUCCESS = 1;
     /**
-    *   Should not process plugin
+    *   Should not process this plugin
     */
     static int ERROR = 0;
     /**
@@ -37,7 +37,7 @@ abstract class Plugin
         return Plugin.ERROR;
     }
     /**
-    *   Wether convertToD_Pipe can be called
+    *   Whether convertToD_Pipe can be called
     */
     abstract int main(string[] args)
     out(r)
@@ -84,6 +84,6 @@ abstract class Plugin
 
 mixin template PluginLoad()
 {
-    import core.sys.windows.dll:SimpleDllMain;
+    import core.sys.windows.dll : SimpleDllMain;
     mixin SimpleDllMain;
 }

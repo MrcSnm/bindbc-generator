@@ -379,10 +379,10 @@ class CimGuiOverloadPlugin : Plugin
     }
     override string getHelpInformation()
     {
-        return r"This plugin was made to be used in conjunction with BindBC-Generator, located on
+        return r"This plugin was made to be used in conjunction with BindBC-Generator, located at
 https://github.com/MrcSnm/bindbc-generator
 
-1: Argument must be 'cimgui' path, it will look for definitions.json and overloads.txt 
+1: The path to 'cimgui'; it will look for definitions.json and overloads.txt.
 2(Optional): Output path";
     }
 
