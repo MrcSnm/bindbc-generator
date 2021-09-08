@@ -12,6 +12,10 @@ bindbc pattern, it has dependencies on:
 You will also likely need [Clang(libclang)](https://releases.llvm.org/download.html), as a dependency of D++.
 See more [in their repo](https://github.com/atilaneves/dpp).
 
+> VERY BIG SPOILER ALERT!
+> This code was written in a hurry. As a result, it is really jank, undocumented and very hard to understand.
+> USE IT AT YOUR OWN RISK. You will likely have to spend a lot of time manually adjusting the generated output.
+
 PR's are welcome.
 
 If you use bindbc-generator in your project, please, link to this repo.

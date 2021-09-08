@@ -310,6 +310,16 @@ class CimGuiOverloadPlugin : Plugin
     string outputPath;
     override int main(string[] args)
     {
+        import std.string;
+        // WTF is this??? Please somebody help, I'm dying.
+        if (args.length == 2 && args[1].startsWith(`"[`))
+        {
+            auto newArgs = [args[0]];
+            newArgs ~= args[1][2..$-2].split(" ");
+            writeln(newArgs);
+            args = newArgs;
+        }
+
         if(args.length < 2)
             return returnError("Argument Expected:\nNo path for cimgui folder provided!");
         else if(args.length == 3)
@@ -319,7 +329,7 @@ class CimGuiOverloadPlugin : Plugin
         
         if(!exists(cimguiPath))
         {
-            string temp = (getcwd()~"/"~cimguiPath~"/").asNormalizedPath.array;
+            string temp = absolutePath(cimguiPath);
             writeln("Checking if ", temp, " exists");
             if(exists(temp))
             {
@@ -367,6 +377,7 @@ class CimGuiOverloadPlugin : Plugin
         //Search for pOuts on processedStr for putting & 
         
         processedStr = injectRefOnPOut(processedStr);
+        writeln("WRITING TO " ~ outputPath);
         if(outputPath)
         {
             mkdirRecurse(outputPath);
