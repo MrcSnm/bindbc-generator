@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(Windows) Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "E:\\Coding\\D\\bindbc-cimgui\\bindbc-generator\\bin\\bindbc-generate.exe",
+            "args": [
+                "--file", "../cimgui/cimgui.h", 
+                "--dpp-path", "E:\\Coding\\D\\dpp\\bin\\d++.exe", 
+                "--presets", "cimgui"],
+            "stopAtEntry": false,
+            "cwd": "E:\\Coding\\D\\bindbc-cimgui\\bindbc-generator",
+            "environment": [],
+            "console": "externalTerminal",
+            "sourceFileMap": {
+                "/c/": "C:/",
+                "c:\\": "C:\\"
+            }
+        }
+    ]
+}
