@@ -20,4 +20,6 @@ libclang.dll
 *.def
 *.lib
 *.exp
-cimgui.h
+
+bindbc
+temp

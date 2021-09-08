@@ -12,7 +12,7 @@ import std.array;
 import std.string;
 import std.getopt;
 import std.regex : replaceAll, matchAll, regex, Regex;
-import std.path : baseName, stripExtension;
+import std.path;
 import std.stdio : writeln, File;
 import pluginadapter;
 import plugin;
@@ -20,6 +20,7 @@ import plugin;
 
 string dppPath;
 string pluginsPath;
+string tempPath;
 string optFile;
 string optDppArgs;
 string optPresets;
@@ -37,9 +38,11 @@ void helpInfoSetup(ref GetoptResult helpInfo)
 {
     size_t i = 0;
     // Dpp path
-    helpInfo.options[i++].help = "Path to dpp executable";
+    helpInfo.options[i++].help = "Path to dpp executable. Searched for in PATH if not specified.";
     // Plugins path
-    helpInfo.options[i++].help = "Path to plugins folder";
+    helpInfo.options[i++].help = "Path to plugins folder. Default is `plugins`.";
+    // 
+    helpInfo.options[i++].help = "Path to temporary directory. Default if `temp`.";
     //Dpparg
     helpInfo.options[i++].help = "Arguments to be passed to dpp, --preprocess-only is always included. Pass multiple arguments via comma";
     //File
@@ -104,6 +107,7 @@ int main(string[] args)
             args,
             "dpp-path", &dppPath,
             "plugins-path", &pluginsPath,
+            "temp-path", &tempPath,
             "dpparg|d", &optDppArgs,
             "file|f", &optFile,
             "presets|p", &optPresets,
@@ -124,9 +128,15 @@ int main(string[] args)
     }
     if (pluginsPath is null) 
         pluginsPath = "plugins";
+    if (tempPath is null)
+        tempPath = "temp";
+    if (!exists(tempPath))
+        mkdirRecurse(tempPath);
+    if (optFile !is null)
+        optFile = absolutePath(optFile);
     helpInfoSetup(helpInfo);
     //I don't really understand what type is regex...
-    Regex!char targetReg;
+    Regex!char targetRegex;
 
     if(!checkPluginLoad())
         return Plugin.ERROR;
@@ -136,8 +146,8 @@ int main(string[] args)
 
     if(!pluginOnly)
     {
-        checkPresets(targetReg);
-        checkCustomRegex(targetReg);
+        checkPresets(targetRegex);
+        checkCustomRegex(targetRegex);
     }
 
     if(checkHelpNeeded(helpInfo))
@@ -149,27 +159,27 @@ int main(string[] args)
             return Plugin.ERROR;
         if(optPresets == "" && optCustom == "")
         {
-            writeln("ERROR:\nNo regex nor presets for getting functions specified\n");
+            writeln("ERROR:\nNo regexes or presets for getting functions specified\n");
             return Plugin.ERROR;
         }
-        string funcs = getFuncs(optFile, targetReg);
+        string funcs = getFuncs(optFile, targetRegex);
         if(funcs == "")
         {
             writeln("ERROR:\nNo hit was made by your function");
             return Plugin.ERROR;
         }
-        string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetReg);
+        string cleanFuncs = cleanPreFuncsDeclaration(funcs, targetRegex);
         string dfuncs = cppFuncsToD(cleanFuncs);
         string[] darrFuncs = dfuncs.split("\n");
 
         //It will already remove darrFuncs params
-        string libName = stripExtension(optFile);
+        string libName = baseName(stripExtension(optFile));
         createFuncsFile(libName, darrFuncs);
         createLibLoad(libName, darrFuncs);    
         createPackage(libName);
 
         if(!optNoTypes)
-            remove(optFile.stripExtension ~ ".d");
+            remove(buildPath(tempPath, optFile.setExtension(".d").baseName));
     }
     playPlugins(args[0]);
     
@@ -177,77 +187,46 @@ int main(string[] args)
 } 
 
 
-enum D_TO_REPLACE
-{
-    loneVoid = "()",    
-    unsigned_int = "uint",
-    unsigned_char = "ubyte",
-    _string = "const (char)*", //This will be on the final as it causes problem on regexes
-    head_const = "const $1",
-    _callback = "$1 function($3) $2",
-    _in = " in_",
-    _out = " out_",
-    _align = " align_",
-    _ref = " ref_",
-    _sizeof = "$1.sizeof",
-    //C++ part
-    _template = "$2!($1)",
-
-    addressDefault = "$1 $2 = $3", //Ignores ref for the first def
-    addressAllRef = "ref $1 $2", //Ignores ref for the first def
-    address = "ref $1",
-    NULL = " null",
-
-    _struct = "",
-    _array = "$1* $2",
-    _nullAddress = " null"
-}
-
-enum AliasCreation = "alias p$2 = $1 function";
-enum GSharedCreation = "p$2 $2";
-enum BindSymbolCreation = "lib.bindSymbol(cast(void**)&$2, \"$2\");";
-
-
-
-File createDppFile(string file)
+File createDppFile(string headerFile)
 {
     File f;
-    string dppFile = baseName(stripExtension(file)) ~ ".dpp";
-    if(!exists(file))
+    if(!exists(headerFile))
     {
         writeln("File does not exists");
         return f;
     }
-    if(lastIndexOf(file, ".h") == -1)
+    if(lastIndexOf(headerFile, ".h") == -1)
     {
         writeln("File must be a header");
         return f;
     }
-    if(!exists(dppFile))
+
+    string dppFilePath = buildPath(tempPath, headerFile.setExtension("dpp").baseName());
+    if(exists(dppFilePath))
     {
-        f = File(dppFile, "w");
-        f.write("#include \""~file~"\"");
-        writeln("File '" ~ dppFile ~ "' created");
+        f = File(dppFilePath);
+        writeln("File '" ~ dppFilePath ~ "' already exists, ignoring content creation");
+        return f;
     }
-    else
-    {
-        f = File(dppFile);
-        writeln("File '" ~ dppFile ~ "' already exists, ignoring content creation");
-    }
+    
+    f = File(dppFilePath, "w");
+    f.write("#include \""~absolutePath(headerFile)~"\"");
+    writeln("File '" ~ dppFilePath ~ "' created");
     return f;
 }
 
+// Gets the generated dpp file and generates a d file
 bool executeDpp(File file, string _dppArgs)
 {
-    string selected;
+    string dppExecutableName;
 
     if(dppPath !is null)
     {
         if(exists(dppPath))
-            selected = dppPath;
+            dppExecutableName = dppPath;
         else
         {
-            writeln("Could not create types.d\nReason: dpp not by the specified path");
+            writeln("Could not create types.d\nReason: dpp not found by the specified path");
             return false;
         }
     }
@@ -258,35 +237,39 @@ bool executeDpp(File file, string _dppArgs)
         {
             if(exists(t))
             {
-                selected = t;
+                dppExecutableName = t;
                 break;
             }
         }
-        if(selected == "")
+        if(dppExecutableName == "")
         {
-            writeln("Could not create types.d\nReason: d++/dpp is not on the current folder");
+            writeln("Could not create types.d\nReason: d++ (or dpp) is not in the current folder");
             return false;
         }
     }
 
-    string[] dppArgs = [selected, "--preprocess-only"];
+    string[] dppArgs = [dppExecutableName, "--preprocess-only"];
     if(_dppArgs != "")
         dppArgs ~= _dppArgs.split(",");
+
+    // `file.name` is the header file
     dppArgs ~= file.name;
+    dppArgs ~= "--source-output-path";
+    dppArgs ~= tempPath;
 
     auto ret = executeShell(dppArgs.join(" "));
     
-
     //Okay
     if(ret.status == 0)
     {
+        const generatedModuleName = file.name.stripExtension().baseName();
+        const generatedFilePath = file.name.setExtension("d");
+
         writeln("Types.d was succesfully created with "~dppArgs.join(" "));
         //Instead of renaming, just copy its content and delete it
-        string noExt = stripExtension(file.name);
-        string genName = noExt~".d";
-        string fileContent = "module bindbc."~ noExt~".types;\n" ~readText(genName);
-        mkdirRecurse("bindbc/"~noExt);
-        std.file.write("bindbc/"~noExt~"/types.d", fileContent);
+        string fileContent = "module bindbc." ~ generatedModuleName ~ ".types;\n" ~ readText(generatedFilePath);
+        mkdirRecurse("bindbc/"~generatedModuleName);
+        std.file.write("bindbc/"~generatedModuleName~"/types.d", fileContent);
     }
     else
     {
@@ -323,6 +306,38 @@ auto getFuncs(Input, Reg)(Input file, Reg reg)
     return ret;
 }
 
+enum D_TO_REPLACE
+{
+    loneVoid = "()",    
+    unsigned_int = "uint",
+    unsigned_char = "ubyte",
+    _string = "const (char)*", //This will be on the final as it causes problem on regexes
+    head_const = "const $1",
+    _callback = "$1 function($3) $2",
+    _in = " in_",
+    _out = " out_",
+    _align = " align_",
+    _ref = " ref_",
+    _sizeof = "$1.sizeof",
+    //C++ part
+    _template = "$2!($1)",
+
+    addressDefault = "$1 $2 = $3", //Ignores ref for the first def
+    addressAllRef = "ref $1 $2", //Ignores ref for the first def
+    address = "ref $1",
+    NULL = " null",
+    CONST = "const ($1)",
+
+    _struct = "",
+    _array = "$1* $2",
+    _nullAddress = " null"
+}
+
+enum AliasCreation = "alias p$2 = $1 function";
+enum GSharedCreation = "p$2 $2";
+enum BindSymbolCreation = "lib.bindSymbol(cast(void**)&$2, \"$2\");";
+
+
 /**
 *   Uses a bunch of presets written in the file head, it will convert every C func
 * declaration to D, arrays are transformed to pointers, as if it becomes ref, the function
@@ -348,6 +363,7 @@ string cppFuncsToD(string funcs, bool replaceAditional = false)
         f = f.replaceAll(CPP_TO_D.replaceTemplate, _template);
         f = f.replaceAll(CPP_TO_D.replaceAddress, address);
         f = f.replaceAll(CPP_TO_D.replaceNULL, NULL);
+        f = f.replaceAll(CPP_TO_D.replaceCONST, CONST);
 
         f = f.replaceAll(CPP_TO_D.replaceStruct, _struct);
         f = f.replaceAll(CPP_TO_D.replaceArray, _array);

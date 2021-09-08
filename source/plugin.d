@@ -11,11 +11,11 @@ abstract class Plugin
     /**
     *   If returned from main, the plugin should be processed
     */
-    static int SUCCESS = 1;
+    enum int SUCCESS = 0;
     /**
     *   Should not process this plugin
     */
-    static int ERROR = 0;
+    enum int ERROR = 1;
     /**
     *   Target for getting the options inside bindbc-generate
     */
