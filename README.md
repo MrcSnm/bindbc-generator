@@ -93,22 +93,24 @@ If none of the plugins were given arguments, their help messages are displayed:
 bindbc-generate --load-plugins="myplugin" --plugin-args myplugin-behavior="[]"
 ```
 
-
 ## Options
 ```
 Bindbc-generator options.
 If you find an issue with the content generation, report it at
 https://www.github.com/MrcSnm/bindbc-generator
 
--d         --dpparg Arguments to be appended to dpp, --preprocess-only is always included. Pass multiple arguments via comma  
--f         --file Target header to get functions and types for generation
+          --dpp-path Path to dpp executable. Searched for in PATH if not specified.
+      --plugins-path Path to plugins folder. Default is `plugins`.
+         --temp-path Path to temporary directory. Default if `temp`.
+-d          --dpparg Arguments to be passed to dpp, --preprocess-only is always included. Pass multiple arguments via comma
+-f            --file Target header to get functions and types for generation
 -p         --presets
 (Presets and custom are mutually exclusive)
 Function getter presets:
    cimgui - Preset used for compiling libcimgui -> https://github.com/cimgui/cimgui
 
 -n         --notypes Don't execute Dpp, and don't generate the types file
--c         --custom
+-c          --custom
 Flags m and g are always added, $1 must always match function without exports.
 Examples:
     void func(char* str);
@@ -120,24 +122,24 @@ The postfix will be a predefined one for function format:
     Appends ^(?: at the start(The one which is meant to be ignored)
     Appends )(.+\);)$ at the end (Finish the ignored one and append the function $1 one)
 
--l         --load-plugins
-Loads plugins located at the plugins folder. For the plugin being loaded it must:
+-l    --load-plugins
+Loads plugins located in the plugins folder. For the plugin being loaded it must:
     1: Export a function named export(Modulename) which returns a Plugin instance.
     2: Have a compiled .dll or .so following the scheme 'libpluginPLUGIN_FOLDER_NAME'
         2.1: If you need many exports in a single dll, create a package.d with public imports and
         compile it, plugin finding is first folder only, i.e: not recursive.
 
           --load-all
-Loads every plugin located at the plugis folder
--a        --plugin-args
-Plugins arguments to pass into the entrance point.
+Loads every plugin located in the plugins folder
+-a     --plugin-args
+Arguments to pass to a plugin's entry point.
 Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
 to pass only the current working dir.
 
-Example on multiple args-> -a myplugin=[arg1 arg2 arg3]
+Example on multiple args -> --plugin-args myplugin=[arg1 arg2 arg3]
 
 Reserved arguments are:
-    d-conv -> Converts from C to D
+    d-conv -> Converts from C to D; every plugin that receives that argument will have its string from convertToD_Pipe() converted to D style
 
 -r       --recompile
 Using this option will force a recompilation of the plugins!

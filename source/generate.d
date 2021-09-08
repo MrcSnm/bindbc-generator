@@ -42,7 +42,7 @@ void helpInfoSetup(ref GetoptResult helpInfo)
     // Plugins path
     helpInfo.options[i++].help = "Path to plugins folder. Default is `plugins`.";
     // 
-    helpInfo.options[i++].help = "Path to temporary directory. Default if `temp`.";
+    helpInfo.options[i++].help = "Path to temporary directory. Default is `temp`.";
     //Dpparg
     helpInfo.options[i++].help = "Arguments to be passed to dpp, --preprocess-only is always included. Pass multiple arguments via comma";
     //File

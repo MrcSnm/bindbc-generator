@@ -369,9 +369,8 @@ class CimGuiOverloadPlugin : Plugin
         processedStr = injectRefOnPOut(processedStr);
         if(outputPath)
         {
-            if(outputPath[$-1] == '/')
-                outputPath = outputPath[0..$-1];
-            write(outputPath~"/overloads.d", s~processedStr);
+            mkdirRecurse(outputPath);
+            write(buildPath(outputPath, "overloads.d"), s~processedStr);
         }
         else
             write("overloads.d", s~processedStr);

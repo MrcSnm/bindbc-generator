@@ -13,9 +13,9 @@ enum Presets
 
 enum CPP_TO_D
 {
-    replaceUint = ctRegex!(r"unsigned\sint"),
-    replaceUByte = ctRegex!(r"unsigned\schar"),
-    replaceHeadConst = ctRegex!(r"const\s(.+?)\sconst"),
+    replaceUint = ctRegex!(r"unsigned int"),
+    replaceUByte = ctRegex!(r"unsigned char"),
+    replaceHeadConst = ctRegex!(r"const (.+?) const"),
     replaceCallback = ctRegex!(r"([\w*]+?)\(\*(.+?)\)\((.+?)\)"),
     replaceIn = ctRegex!(r"\sin\b"),
     replaceOut = ctRegex!(r"\sout\b"),
