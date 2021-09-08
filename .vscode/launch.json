@@ -9,7 +9,11 @@
             "args": [
                 "--file", "../cimgui/cimgui.h", 
                 "--dpp-path", "E:\\Coding\\D\\dpp\\bin\\d++.exe", 
-                "--presets", "cimgui"],
+                "--load-all",
+                "--presets", "cimgui",
+                "--plugin-args", "cimgui-overloads=\"[../cimgui ../source/bindbc/cimgui2 d-conv]\"",
+                "--presets=\"cimgui\""
+            ],
             "stopAtEntry": false,
             "cwd": "E:\\Coding\\D\\bindbc-cimgui\\bindbc-generator",
             "environment": [],
