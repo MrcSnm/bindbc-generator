@@ -417,11 +417,7 @@ class CimGuiOverloadPlugin : Plugin
         //Search for pOuts on processedStr for putting & 
         
         processedStr = injectRefOnPOut(processedStr);
-<<<<<<< HEAD
         writeln("Writing overloads.d to the path '" ~ outputPath~"'");
-=======
-        writeln("WRITING TO " ~ outputPath);
->>>>>>> 3ae810eb896e4fc94dac53de71a0c36c3d348fcd
         if(outputPath)
         {
             mkdirRecurse(outputPath);
