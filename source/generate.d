@@ -458,7 +458,7 @@ void pluginArgsHandler(string opt, string value)
                 return;
             }
             else
-                optPluginArgs[pluginName]~= v[1][1..$-1].split(" ");
+                optPluginArgs[pluginName]~= v[1][1..$-1].split(", ");
         }
         else
             optPluginArgs[pluginName]~= v[1];
