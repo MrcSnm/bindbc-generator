@@ -49,7 +49,11 @@ string[] ignoreList =
     "ImVector_erase",
     "ImVector_find",
     "ImVector_front",
-    "ImVector_resize"
+    "ImVector_resize",
+    "ImSpan_ImSpan",
+    "ImSpan_begin",
+    "ImSpan_end",
+    "ImSpan_set",
 ];
 
 
