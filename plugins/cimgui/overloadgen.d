@@ -352,6 +352,10 @@ class CimGuiOverloadPlugin : Plugin
     override int main(string[] args)
     {
         import std.string;
+<<<<<<< HEAD
+=======
+        // WTF is this??? Please somebody help, I'm dying.
+>>>>>>> 3ae810eb896e4fc94dac53de71a0c36c3d348fcd
         if (args.length == 2 && args[1].startsWith(`"[`))
         {
             auto newArgs = [args[0]];
@@ -359,8 +363,11 @@ class CimGuiOverloadPlugin : Plugin
             writeln(newArgs);
             args = newArgs;
         }
+<<<<<<< HEAD
         writeln(args);
 
+=======
+>>>>>>> 3ae810eb896e4fc94dac53de71a0c36c3d348fcd
 
         if(args.length < 2)
             return returnError("Argument Expected:\nNo path for cimgui folder provided!");
@@ -419,7 +426,11 @@ class CimGuiOverloadPlugin : Plugin
         //Search for pOuts on processedStr for putting & 
         
         processedStr = injectRefOnPOut(processedStr);
+<<<<<<< HEAD
         writeln("Writing overloads.d to the path '" ~ outputPath~"'");
+=======
+        writeln("WRITING TO " ~ outputPath);
+>>>>>>> 3ae810eb896e4fc94dac53de71a0c36c3d348fcd
         if(outputPath)
         {
             mkdirRecurse(outputPath);

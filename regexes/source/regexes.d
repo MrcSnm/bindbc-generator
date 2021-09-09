@@ -5,7 +5,7 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 module regexes;
-import std.regex : ctRegex;
+public import std.regex;
 enum Presets
 {
     cimguiFuncs = ctRegex!(r"^(?:CIMGUI_API\s+)(.+\);)$", "mg"),
@@ -30,6 +30,7 @@ enum CPP_TO_D
     replaceAddressDefault = ctRegex!(`([\w<>!]+?)\s*&\s*(\w+)\s*=\s*(?:(?:\"|\')\w+(?:\"|\')|([\w<>]+\s*\(?[\w,'"]*\)?))`),
     replaceAddress = ctRegex!(r"([\w<>\(\)!]+?)\s*&"),
     replaceNULL = ctRegex!(r"\sNULL\b"),
+    replaceCONST = ctRegex!(r"CONST\s+(\w+\s*\*)"),
 
     replaceStruct = ctRegex!(r"\bstruct\b"),
     replaceArray = ctRegex!(r"((?:const\s)?\w+?\*?\s+?)(\w+?)\[([\w\d]*)\]"),
