@@ -253,6 +253,7 @@ static string generateOverloads(Function[] funcs)
     string funcName;
     foreach(func; funcs)
     {
+        line=null;
         funcName = func.name;
         if(funcName == func.owner)
             funcName = "new"~funcName;
@@ -262,7 +263,7 @@ static string generateOverloads(Function[] funcs)
         {
             if(!willDefineOverloadTemplate)
                 willDefineOverloadTemplate = true;
-            line = "alias "~funcName ~"= overload!(";
+            line= "alias "~funcName ~"= overload!(";
             string comment = "/**\n";
             foreach(i, ov ; func.overloads)
             {
