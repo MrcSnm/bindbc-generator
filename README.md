@@ -98,7 +98,7 @@ Plugins arguments to pass into the entrance point.
 Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
 to pass only the current working dir.
 
-Example on multiple args-> -a myplugin=[arg1 arg2 arg3]
+Example on multiple args-> --plugin-args myplugin="[arg1, arg2, arg3]"
 
 Reserved arguments are:
     d-conv -> Converts from C to D

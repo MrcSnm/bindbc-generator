@@ -447,7 +447,7 @@ void pluginArgsHandler(string opt, string value)
     if(opt == "plugin-args|a")
     {
         if(value.countUntil("=") == -1)
-            return writeln("plugin-args wrong formatting! It must be --plugin-args pluginname=\"[arg1 arg2]\" or -a pluginname=\"[arg1 arg2]\"");
+            return writeln("plugin-args wrong formatting! It must be --plugin-args pluginname=\"[arg1, arg2]\" or -a pluginname=\"[arg1, arg2]\"");
         string[] v = value.split("=");
         string pluginName = v[0];
         if(v[1][0] == '[')
@@ -582,7 +582,7 @@ Plugins arguments to pass into the entrance point.
 Only the plugins with at least args 1 arg will be executed, pass a null string if you wish
 to pass only the current working dir.
 
-Example on multiple args-> -a myplugin=[arg1 arg2 arg3]
+Example on multiple args-> -a myplugin=[arg1, arg2, arg3]
 
 Reserved arguments are:
     d-conv -> Converts from C to D, every plugin that receives that argument will have its string from convertToD_Pipe() converted to D style
