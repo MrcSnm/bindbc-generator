@@ -31,7 +31,7 @@ So, the `cimgui` plugin would be located at `plugins/cimgui`.
 When you try to use your plugin via the generator, it will try to compile your source files 
 and generate a dll of your plugin as output. Then it would link against that dll. 
 
-To write a plugin, create a class that ~~implements the `Plugin` interface~~ inherits from the `Plugin` base class.
+To write a plugin, create a class that inherits from the `Plugin` abstract class.
 
 myplugin.d
 ```d
@@ -73,13 +73,13 @@ Now, when executing the program, you will need to pass at least one argument, li
 Unless you pass at least one argument, the plugin won't be executed.
 
 ```
-bindbc-generate --load-plugins="myplugin" --plugin-args myplugin-behavior="[arg1 arg2 arg3]"
+bindbc-generate --load-plugin="myplugin" --plugin-args myplugin-behavior="[arg1, arg2, arg3]"
 ```
 
-Just to be clear, `--load-plugins` *compiles and loads the code in the plugin folders with that name*, 
+Just to be clear, `--load-plugin` *loads the code in the plugin folders with that name*, 
 while `--plugin-args` *runs the plugin with the given name (target), passing the given arguments*.
 
-`--load-plugins` (or `-l`) lets you choose which plugins to load.
+`--load-plugin` (or `-l`) lets you choose which plugins to load.
 You can pass `--load-all` instead to load every plugin in the plugins folder.
 
 `--plugin-args` (or `-a`) will let you pass arguments to your plugin's main function.

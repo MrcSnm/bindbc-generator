@@ -113,7 +113,7 @@ int main(string[] args)
             "notypes|n", &optNoTypes,
             "custom|c", &optCustom,
             "use-func-prefix|u", &optFuncPrefix,
-            "load-plugins|l", &optUsingPlugins,
+            "load-plugin|l", &optUsingPlugins,
             "load-all", &optLoadAll,
             "plugin-args|a", &pluginArgsHandler,
             "recompile|r", &optRecompile,
