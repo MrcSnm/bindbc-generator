@@ -17,6 +17,9 @@ static struct OverloadedFunction
     string argsTypes;
     string argsParams;
     string cimguiFunc;
+
+    string[string] callbackAliases;
+    bool isTemplated;
 }
 
 static struct Function
@@ -63,6 +66,14 @@ bool hasVarArgs(string params)
     return params.countUntil("...") != -1;
 }
 
+bool hasTemplateArgs(string params)
+{
+    for(int i = 0; i < params.length; i++)
+        if(params[i] == 'T' && (params[i+1] == ' ' || (params[i+1] == '*' && params[i+2] == ' ')))
+            return true;
+    return false;
+}
+
 static Function[] getFunctions(File file)
 {
     Function[] ret;
@@ -72,8 +83,9 @@ static Function[] getFunctions(File file)
     foreach(int i, string line; lines(file))
     {
         int firstCharValue = line[0];
-        if(firstCharValue == '-')
+        if(firstCharValue == '-') //Is begin or end of file
             continue;
+        //If is an overload ID and the function is not being ignored
         if(firstCharValue >= '0' && firstCharValue <= '9' && func.exists)
         {
             string[] infos = line.split();
@@ -82,28 +94,33 @@ static Function[] getFunctions(File file)
             else
             {
                 OverloadedFunction overload;
-                if(infos[1] == "nil")
+                if(infos[1] == "nil") //Returns an instance
                     overload.returnType = func.owner~"*";
+                else if(infos[1] == "T" || infos[1] == "T*")
+                {
+                    overload.isTemplated = true;
+                    overload.returnType = infos[1];
+                }
                 else
                     overload.returnType = infos[1];
                 long constInd = infos.countUntil("const");
                 int infoIndex = 2;
-                if(constInd != -1)
+                if(constInd != -1) //Add const with parenthesis
                 {
-                    overload.returnType~= " "~infos[constInd+1];
+                    overload.returnType~= " ("~infos[constInd+1]~")";
                     infoIndex++;
                 }
+                //Next index is the cimgui bound name
                 overload.cimguiFunc = infos[infoIndex];
-                
-                // long argsStart = line.countUntil("("); //Not used anymore
+
+                ///May set function as templated                
                 getParameters(func, overload);
-                // overload.argsTypes = line[cast(uint)argsStart..line.length];
                 func.overloads~= overload;
             }
         }
-        else
+        else //Not a overload, it is defining overloads for a function
         {
-            if(func.exists)
+            if(func.exists) //If there is already one function that was being defined, append it
                 ret~= func;
             func = Function();
             string[] infos = line.split("_"); //Gets the function name
@@ -113,25 +130,24 @@ static Function[] getFunctions(File file)
                 continue;
             }
             int nameIndex = 0;
-            if(infos.length != 1)
+            if(infos.length != 1) //If it has an underline, it is a member function
             {
+                //Member functions has owner
                 func.owner = infos[0];
                 nameIndex = 1;
-                long separatorIndex = infos[nameIndex].countUntil("\t");
+                long separatorIndex = infos[nameIndex].countUntil("\t"); //Try to advance if the next char is \t
                 if(separatorIndex == -1)
-                    separatorIndex = infos[nameIndex].countUntil(" ");
-                if(separatorIndex == -1)
+                    separatorIndex = infos[nameIndex].countUntil(" ");  //Try to advance a space
+                if(separatorIndex == -1) //No overload
                     return null;
-                func.name = infos[nameIndex][0..cast(uint)separatorIndex];
+                func.name = infos[nameIndex][0..cast(uint)separatorIndex]; //Gets the name by removing the number of overloads
             }
-            else
+            else //No owner as there is not _
             {
                 infos = line.split();
                 func.owner = "";
-                func.name = infos[0];
+                func.name = infos[0];  //After splitting, always located at 0
             }
-            
-            
             func.exists = true;
         }
     }
@@ -169,6 +185,7 @@ static void getParameters(ref Function func, ref OverloadedFunction overload)
             overload.argsTypes = ovFunc["args"].str;
 
             func.willForward = hasVarArgs(overload.argsTypes);
+            if(!overload.isTemplated) overload.isTemplated = hasTemplateArgs(overload.argsTypes);
             
             overload.argsParams = "(";
             JSONValue argParams = ovFunc["argsT"];
@@ -176,6 +193,8 @@ static void getParameters(ref Function func, ref OverloadedFunction overload)
             foreach(i, params; argParams.array)
             {
                 overload.argsParams~= params["name"].str;
+                string aliasName;
+
                 if(const(JSONValue)* ret = "ret" in params) //Is a callback
                 {
                     // argsTypes~= "extern(C) ";
@@ -183,9 +202,21 @@ static void getParameters(ref Function func, ref OverloadedFunction overload)
                     //I'll not deal with callback that receives a callback as it is too complex and unnecessary 
                     nextInd = indexOf(overload.argsTypes, ')', nextInd)+1;
                     nextInd = indexOf(overload.argsTypes, ')', nextInd)+1;
+
+                    string callbackSignature = overload.argsTypes[ind..nextInd];
+                    long startCb = callbackSignature.indexOf("(");
+                    long endCb = callbackSignature.indexOf(")");
+
+                    //Generate the callback signature (D converted already) for alias definition
+                    callbackSignature = "extern(C) "~callbackSignature[0..startCb] ~ " function "~callbackSignature[endCb+1..$];
+                    ///Alias name based on argument name
+                    aliasName = func.name~"_"~params["name"].str;
+                    overload.callbackAliases[callbackSignature] = aliasName;
+
                 }
+                //Check if it has more parameters
                 long nextIndTemp = indexOf(overload.argsTypes, ",", nextInd);
-                if(nextIndTemp == -1)
+                if(nextIndTemp == -1) //Seek the function end if not
                     nextIndTemp = indexOf(overload.argsTypes, ")", nextInd);
                 nextInd = nextIndTemp+1;
 
@@ -193,11 +224,13 @@ static void getParameters(ref Function func, ref OverloadedFunction overload)
                 {
                     overload.pOutType = params["type"].str;
                 }
+                else if(aliasName)
+                    argsTypes~= aliasName ~" "~params["name"].str~ (i+1 != len ? ", " : "");
                 else
                     argsTypes~= overload.argsTypes[ind..nextInd];
                 ind = nextInd;
                 if(i+1 != len)
-                    overload.argsParams~=",";
+                    overload.argsParams~=","; //Add comma if not at the end
             }
             if(argsTypes != "")
             {
@@ -223,7 +256,8 @@ static string generateOverloads(Function[] funcs)
         funcName = func.name;
         if(funcName == func.owner)
             funcName = "new"~funcName;
-        
+        else if(func.owner != "")
+            funcName = func.owner~"_"~func.name;
         if(func.willForward)
         {
             if(!willDefineOverloadTemplate)
@@ -243,7 +277,13 @@ static string generateOverloads(Function[] funcs)
         }
         else foreach(overload; func.overloads)
         {
-            line = overload.returnType~" "~funcName~overload.argsTypes~"{";
+            //The key is the signature, the value is the name
+            foreach(callbackKey, callbackValue; overload.callbackAliases)
+                line = "\nalias "~callbackValue ~" = "~callbackKey~";\n";
+            if(overload.isTemplated)
+                line~= overload.returnType~" "~funcName~"(T)"~overload.argsTypes~"{";
+            else
+                line~= overload.returnType~" "~funcName~overload.argsTypes~"{";
             if(overload.returnType != "void")
             {
                 if(overload.pOutType == "")
@@ -262,6 +302,7 @@ static string generateOverloads(Function[] funcs)
             }
             line~=";}";
             fileContent~= line~"\n";
+            line=null;
         }
     }
     return fileContent;
@@ -310,6 +351,17 @@ class CimGuiOverloadPlugin : Plugin
     string outputPath;
     override int main(string[] args)
     {
+        import std.string;
+        if (args.length == 2 && args[1].startsWith(`"[`))
+        {
+            auto newArgs = [args[0]];
+            newArgs ~= args[1][2..$-2].split(" ");
+            writeln(newArgs);
+            args = newArgs;
+        }
+        writeln(args);
+
+
         if(args.length < 2)
             return returnError("Argument Expected:\nNo path for cimgui folder provided!");
         else if(args.length == 3)
@@ -319,7 +371,7 @@ class CimGuiOverloadPlugin : Plugin
         
         if(!exists(cimguiPath))
         {
-            string temp = (getcwd()~"/"~cimguiPath~"/").asNormalizedPath.array;
+            string temp = absolutePath(cimguiPath);
             writeln("Checking if ", temp, " exists");
             if(exists(temp))
             {
@@ -367,11 +419,11 @@ class CimGuiOverloadPlugin : Plugin
         //Search for pOuts on processedStr for putting & 
         
         processedStr = injectRefOnPOut(processedStr);
+        writeln("Writing overloads.d to the path '" ~ outputPath~"'");
         if(outputPath)
         {
-            if(outputPath[$-1] == '/')
-                outputPath = outputPath[0..$-1];
-            write(outputPath~"/overloads.d", s~processedStr);
+            mkdirRecurse(outputPath);
+            write(buildPath(outputPath, "overloads.d"), s~processedStr);
         }
         else
             write("overloads.d", s~processedStr);
@@ -379,10 +431,10 @@ class CimGuiOverloadPlugin : Plugin
     }
     override string getHelpInformation()
     {
-        return r"This plugin was made to be used in conjunction with BindBC-Generator, located on
+        return r"This plugin was made to be used in conjunction with BindBC-Generator, located at
 https://github.com/MrcSnm/bindbc-generator
 
-1: Argument must be 'cimgui' path, it will look for definitions.json and overloads.txt 
+1: The path to 'cimgui'; it will look for definitions.json and overloads.txt.
 2(Optional): Output path";
     }
 
