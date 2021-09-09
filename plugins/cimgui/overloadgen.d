@@ -108,6 +108,8 @@ static Function[] getFunctions(File file)
                 if(constInd != -1) //Add const with parenthesis
                 {
                     overload.returnType~= " ("~infos[constInd+1]~")";
+                    if(infos[constInd+1] == "T" || infos[constInd+1] == "T*")
+                        overload.isTemplated = true;
                     infoIndex++;
                 }
                 //Next index is the cimgui bound name
